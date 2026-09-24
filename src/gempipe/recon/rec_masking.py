@@ -182,7 +182,8 @@ def task_recmasking(genome, args):
             start = int(row['sstart'])
             end = int(row['send'])
             contig = row["sseqid"]
-            contig = contig.split('|')[1]   #split() because blast but some obscure formatting, eg: gb|NIGV01000003.1| for NIGV01000003.1.
+            if "|" in contig:
+                 contig = contig.split('|')[1]   #split() because blast but some obscure formatting, eg: gb|NIGV01000003.1| for NIGV01000003.1.
             strand = '+'
             if start > end: # if on the other strand, invert the positions. 
                 strand = '-'
