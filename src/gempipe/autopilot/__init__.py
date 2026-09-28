@@ -24,6 +24,10 @@ from ..commons import get_outdir
 def autopilot_command(args, logger):
         
     
+    # assure the output directory: 
+    outdir = get_outdir(args.outdir)
+    
+    
     response = preliminary_checks(args, logger)
     if response == 0: return 0
     if response == 1: return 1
@@ -34,15 +38,15 @@ def autopilot_command(args, logger):
 
 
     # insert the prioritized gapfiller, just before the deduplication.
-    # this will OVERWRITE the panmodel in 'working/duplicates/draft_panmodel.json'
+    # this will OVERWRITE the panmodel in '<outdir>/working/duplicates/draft_panmodel.json'
     # taht was created during draft_reconstruction()!  
-    response = prio_gapfiller(logger, args.refmodel, args.refproteome, args.staining, args.mancor, args.media, args.minpanflux)
+    response = prio_gapfiller(logger, outdir, args.refmodel, args.refproteome, args.staining, args.mancor, args.media, args.minpanflux)
     if response == 1: return 1
 
 
     # save the panmodel md5:
-    panmodel_md5 = get_md5_string('working/duplicates/draft_panmodel.json')
-    with open('working/duplicates/md5.pickle', 'wb') as handle: 
+    panmodel_md5 = get_md5_string(f'{outdir}working/duplicates/draft_panmodel.json')
+    with open(f'{outdir}working/duplicates/md5.pickle', 'wb') as handle: 
         pickle.dump(panmodel_md5, handle)
 
         
@@ -52,7 +56,6 @@ def autopilot_command(args, logger):
 
     # make a SBML copy of the final draft panmodel if requested
     if args.sbml: 
-        outdir = get_outdir(args.outdir)
         # load the final draft panmodel (prio-gapfilled)
         draft_panmodel = cobra.io.load_json_model(outdir + 'draft_panmodel.json')
         # create a SBML copy
@@ -62,7 +65,6 @@ def autopilot_command(args, logger):
     # now we have an already gap-filled and (partially) curated panmodel.
     # apply the derivation of strain- and species-specific metabolic models:
     # load input files:
-    outdir = get_outdir(args.outdir)
     panmodel = cobra.io.load_json_model( outdir + 'draft_panmodel.json')
     pam = pnd.read_csv(outdir + 'pam.csv', index_col=0)
     report = pnd.read_csv(outdir + 'report.csv', index_col=0)

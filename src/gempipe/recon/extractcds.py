@@ -27,16 +27,20 @@ from ..commons import update_metadata_manual
 def task_annotation(genome, args):
     
     
+    # retrive the arguments:
+    outdir = args['outdir']
+    
+    
     # get the basename without extension:
     basename = os.path.basename(genome)
     accession, _ = os.path.splitext(basename)
 
 
     # launch the command
-    with open(f'working/logs/stdout_annot_{accession}.txt', 'w') as stdout, open(f'working/logs/stderr_annot_{accession}.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_annot_{accession}.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_annot_{accession}.txt', 'w') as stderr: 
         command = f"""prokka --force --quiet \
             --cpus 1 \
-            --outdir working/proteomes/ \
+            --outdir {outdir}working/proteomes/ \
             --prefix {accession} \
             --noanno \
             --norrna \
@@ -48,7 +52,7 @@ def task_annotation(genome, args):
         
     # convert gff files to dataframe: 
     coords_df = []
-    with open(f'working/proteomes/{accession}.gff', 'r') as r_handler: 
+    with open(f'{outdir}working/proteomes/{accession}.gff', 'r') as r_handler: 
         file = r_handler.read()
         file = file.split('##FASTA', 1)[0] # not interested in contigs
         for line in file.split('\n'):
@@ -68,22 +72,22 @@ def task_annotation(genome, args):
     
     # format the dataframe and save
     coords_df = coords_df[['ID', 'accession', 'contig', 'strand', 'start', 'end']]
-    coords_df.to_csv(f'working/coordinates/{accession}.csv')
+    coords_df.to_csv(f'{outdir}working/coordinates/{accession}.csv')
         
         
     # remove useless files:
-    os.remove(f'working/proteomes/{accession}.err')
-    os.remove(f'working/proteomes/{accession}.ffn')
-    os.remove(f'working/proteomes/{accession}.fna')
-    os.remove(f'working/proteomes/{accession}.fsa')
-    os.remove(f'working/proteomes/{accession}.gbk')
-    os.remove(f'working/proteomes/{accession}.log')
-    os.remove(f'working/proteomes/{accession}.sqn')
-    os.remove(f'working/proteomes/{accession}.tbl')
-    os.remove(f'working/proteomes/{accession}.tsv')
-    os.remove(f'working/proteomes/{accession}.txt')
+    os.remove(f'{outdir}working/proteomes/{accession}.err')
+    os.remove(f'{outdir}working/proteomes/{accession}.ffn')
+    os.remove(f'{outdir}working/proteomes/{accession}.fna')
+    os.remove(f'{outdir}working/proteomes/{accession}.fsa')
+    os.remove(f'{outdir}working/proteomes/{accession}.gbk')
+    os.remove(f'{outdir}working/proteomes/{accession}.log')
+    os.remove(f'{outdir}working/proteomes/{accession}.sqn')
+    os.remove(f'{outdir}working/proteomes/{accession}.tbl')
+    os.remove(f'{outdir}working/proteomes/{accession}.tsv')
+    os.remove(f'{outdir}working/proteomes/{accession}.txt')
     # gff files could be useful for pangenome analysis like Raory/Panaroo:
-    shutil.move(f'working/proteomes/{accession}.gff', f'working/gff/{accession}.gff')
+    shutil.move(f'{outdir}working/proteomes/{accession}.gff', f'{outdir}working/gff/{accession}.gff')
         
     
     # return a row for the dataframe
@@ -91,11 +95,11 @@ def task_annotation(genome, args):
 
 
 
-def create_species_to_proteome(logger):
+def create_species_to_proteome(logger, outdir):
     
     
     # load the previously created species_to_genome: 
-    with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
         species_to_genome = pickle.load(handler)
         
         
@@ -106,22 +110,22 @@ def create_species_to_proteome(logger):
         for genome in species_to_genome[species]: 
             basename = os.path.basename(genome)
             accession, _ = os.path.splitext(basename)
-            species_to_proteome[species].append(f'working/proteomes/{accession}.faa')
+            species_to_proteome[species].append(f'{outdir}working/proteomes/{accession}.faa')
     logger.debug(f"Created the species-to-proteome dictionary: " + str(species_to_proteome))
     
             
     # save the dictionary to disk: 
-    with open('working/proteomes/species_to_proteome.pickle', 'wb') as file:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'wb') as file:
         pickle.dump(species_to_proteome, file)
-    logger.debug(f"Saved the species-to-proteome dictionary to file: ./working/proteome/species_to_proteome.pickle.")
+    logger.debug(f"Saved the species-to-proteome dictionary to file: {outdir}working/proteome/species_to_proteome.pickle.")
     
     
     
-def create_seq_to_coords(logger):
+def create_seq_to_coords(logger, outdir):
     
     
     # load the previously created species_to_proteome: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
 
     
@@ -135,9 +139,9 @@ def create_seq_to_coords(logger):
             
     
     # quick check of the available dict to save time:
-    if os.path.exists(f'working/coordinates/seq_to_coords.pickle'):
+    if os.path.exists(f'{outdir}working/coordinates/seq_to_coords.pickle'):
         accessions_available = set()
-        with open('working/coordinates/seq_to_coords.pickle', 'rb') as handler:
+        with open(f'{outdir}working/coordinates/seq_to_coords.pickle', 'rb') as handler:
             seq_to_coords = pickle.load(handler)
         for attribs in seq_to_coords.values():
             accessions_available.add(attribs['accession'])
@@ -149,7 +153,7 @@ def create_seq_to_coords(logger):
     # create the dict seq-to-coords
     seq_to_coords = {}
     for accession in accessions: 
-        coords_df = pnd.read_csv(f'working/coordinates/{accession}.csv')
+        coords_df = pnd.read_csv(f'{outdir}working/coordinates/{accession}.csv')
         for index, row in coords_df.iterrows(): 
             if type(row['ID']) != str:
                 continue
@@ -158,28 +162,28 @@ def create_seq_to_coords(logger):
     
     
     # save the dictionary to disk: 
-    with open('working/coordinates/seq_to_coords.pickle', 'wb') as file:
+    with open(f'{outdir}working/coordinates/seq_to_coords.pickle', 'wb') as file:
         pickle.dump(seq_to_coords, file)
-    logger.debug(f"Saved the sequence-to-coordinates dictionary to file: ./working/coordinates/seq_to_coords.pickle.")
+    logger.debug(f"Saved the sequence-to-coordinates dictionary to file: {outdir}working/coordinates/seq_to_coords.pickle.")
     
 
 
 def figure_cds(logger, outdir):
     
     
-    logger.info("Producing figure for extracted CDSs in {outdir}/figures/n_cds.png...")
+    logger.info(f"Producing figure for extracted CDSs in {outdir}/figures/n_cds.png...")
     
     # create summary dataframe  (should be equivalent to 'all_df_combined'): 
     prodigal_summary = []
-    for file in glob.glob(f"working/proteomes/*.faa"):
-        accession = file.replace('working/proteomes/', '').replace('.faa', '')
+    for file in glob.glob(f"{outdir}working/proteomes/*.faa"):
+        accession = os.path.splitext(os.path.basename(file))[0]
         n_cds = open(file).read().count('>')
         prodigal_summary.append({'assembly_accession': accession, 'n_cds': n_cds})
     prodigal_summary = pnd.DataFrame.from_records(prodigal_summary)
     prodigal_summary = prodigal_summary.set_index('assembly_accession', drop=True, verify_integrity=True)
     
     # load the genomes_df to have the 'strain_isolate' and 'organism_name' columns:
-    genomes_df = pnd.read_csv('working/genomes/genomes.csv', index_col=0)
+    genomes_df = pnd.read_csv(f'{outdir}working/genomes/genomes.csv', index_col=0)
     genomes_df = genomes_df.set_index('assembly_accession', drop=True, verify_integrity=True)
     
     # concat the dataframes:
@@ -207,7 +211,7 @@ def figure_cds(logger, outdir):
     if len(df) <= 100:
         plt.savefig(outdir + 'figures/n_cds.png', dpi=300, bbox_inches='tight')
     else:
-        logger.info("Number of genomes is >100: producing the SVG version instead {outdir}/figures/n_cds.svg...")
+        logger.info(f"Number of genomes is >100: producing the SVG version instead {outdir}/figures/n_cds.svg...")
         plt.savefig(outdir + 'figures/n_cds.svg', bbox_inches='tight')
         
     
@@ -218,14 +222,14 @@ def extract_cds(logger, cores, outdir, nofig):
     
     # create sub-directory without overwriting:
     logger.info("Extracting the CDSs from the genomes...")
-    os.makedirs('working/proteomes/', exist_ok=True)
-    os.makedirs('working/coordinates/', exist_ok=True)
-    os.makedirs('working/gff/', exist_ok=True)
+    os.makedirs(f'{outdir}working/proteomes/', exist_ok=True)
+    os.makedirs(f'{outdir}working/coordinates/', exist_ok=True)
+    os.makedirs(f'{outdir}working/gff/', exist_ok=True)
     os.makedirs(outdir + 'figures/', exist_ok=True)
 
 
     # load the previously created species_to_genome: 
-    with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
         species_to_genome = pickle.load(handler)
 
 
@@ -241,13 +245,13 @@ def extract_cds(logger, cores, outdir, nofig):
     for genome in items: 
         basename = os.path.basename(genome)
         accession, _ = os.path.splitext(basename)
-        already_computed.append(os.path.exists(f'working/proteomes/{accession}.faa'))
-        already_computed.append(os.path.exists(f'working/coordinates/{accession}.csv'))
+        already_computed.append(os.path.exists(f'{outdir}working/proteomes/{accession}.faa'))
+        already_computed.append(os.path.exists(f'{outdir}working/coordinates/{accession}.csv'))
     if all(already_computed):
         logger.info("Found all the needed files already computed. Skipping this step.")
         # save the species_to_proteome and seq_to_coords dicts
-        create_species_to_proteome(logger)
-        create_seq_to_coords(logger)
+        create_species_to_proteome(logger, outdir)
+        create_seq_to_coords(logger, outdir)
         
         if not nofig:
             figure_cds(logger, outdir)
@@ -271,7 +275,7 @@ def extract_cds(logger, cores, outdir, nofig):
             itertools.repeat('accession'), 
             itertools.repeat(logger), 
             itertools.repeat(task_annotation),
-            itertools.repeat({}),
+            itertools.repeat({'outdir': outdir}),
         ), chunksize = 1)
     all_df_combined = gather_results(results)  # all_df_combined can be ignored.
     
@@ -282,8 +286,8 @@ def extract_cds(logger, cores, outdir, nofig):
     
     
     # save the species_to_proteome and seq_to_coords dicts
-    create_species_to_proteome(logger)
-    create_seq_to_coords(logger)
+    create_species_to_proteome(logger, outdir)
+    create_seq_to_coords(logger, outdir)
     
     
     if not nofig:
@@ -292,7 +296,7 @@ def extract_cds(logger, cores, outdir, nofig):
 
 
 
-def handle_manual_proteomes(logger, proteomes, metadata):
+def handle_manual_proteomes(logger, outdir, proteomes, metadata):
     
     
     # create a species-to-genome dictionary
@@ -328,29 +332,29 @@ def handle_manual_proteomes(logger, proteomes, metadata):
     
     
     # move the genomes to the usual directory: 
-    os.makedirs('working/proteomes/', exist_ok=True)
+    os.makedirs(f'{outdir}working/proteomes/', exist_ok=True)
     for species in species_to_proteome.keys():
         copied_files = []
         for file in species_to_proteome[species]:
             basename = os.path.basename(file)
-            shutil.copyfile(file, 'working/proteomes/' + basename)
-            copied_files.append('working/proteomes/' + basename)
+            shutil.copyfile(file, f'{outdir}working/proteomes/' + basename)
+            copied_files.append(f'{outdir}working/proteomes/' + basename)
         species_to_proteome[species] = copied_files
-    logger.debug(f"Input proteomes copied to ./working/proteomes/.")
+    logger.debug(f"Input proteomes copied to {outdir}working/proteomes/.")
     logger.debug(f"Created the species-to-proteome dictionary: {str(species_to_proteome)}.") 
     
     
     # save the dictionary to disk: 
-    with open('working/proteomes/species_to_proteome.pickle', 'wb') as file:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'wb') as file:
         pickle.dump(species_to_proteome, file)
-    logger.debug(f"Saved the species-to-proteome dictionary to file: ./working/proteomes/species_to_proteome.pickle.")
+    logger.debug(f"Saved the species-to-proteome dictionary to file: {outdir}working/proteomes/species_to_proteome.pickle.")
     
     
     # Create the genomes/genomes.csv like if genomes were downloaded from NCBI.
     # Useful during plot generation.
     # Warning: the same columns are used in get_metadata_table(). But here only 2 can be filled: 'organism_name' and 'strain_isolate'.
-    get_genomes_csv(source='species_to_proteome')
-    response = update_metadata_manual(logger, metadata, source='species_to_proteome')
+    get_genomes_csv(outdir, source='species_to_proteome')
+    response = update_metadata_manual(logger, outdir, metadata, source='species_to_proteome')
     if response==1: return 1
     
     

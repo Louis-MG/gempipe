@@ -21,7 +21,7 @@ from ..interface.gaps import import_from_universe
     
 
     
-def make_protein_database(logger, refmodel, refproteome):
+def make_protein_database(logger, outdir, refmodel, refproteome):
     # make a Diamond protein database, formed by the universal protein + the reference proteins (if any).
     
     
@@ -53,13 +53,13 @@ def make_protein_database(logger, refmodel, refproteome):
         
         
     # create the diamond database on the concat of the seqs:
-    db_proteins = 'working/free/protein_database'
+    db_proteins = f'{outdir}working/free/protein_database'
     combined_sequences = bigg_proteins + ref_proteins
     _ = SeqIO.write(combined_sequences, f'{db_proteins}.faa', 'fasta')  
 
 
     # now create the diamond database: 
-    with open(f'working/logs/stdout_dmnddb.txt', 'w') as stdout, open(f'working/logs/stderr_dmnddb.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_dmnddb.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_dmnddb.txt', 'w') as stderr: 
         command = f"""diamond makedb --in {db_proteins}.faa -d {db_proteins}.dmnd"""
         process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
         process.wait()
@@ -69,7 +69,7 @@ def make_protein_database(logger, refmodel, refproteome):
             
     
 
-def run_bigg_aligner(logger, cores):
+def run_bigg_aligner(logger, outdir, cores):
     
     
     # some log messages
@@ -77,11 +77,11 @@ def run_bigg_aligner(logger, cores):
     
     
     # run the command:
-    with open(f'working/logs/stdout_biggalign.txt', 'w') as stdout, open(f'working/logs/stderr_biggalign.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_biggalign.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_biggalign.txt', 'w') as stderr: 
         command = f"""diamond blastp --threads {cores} \
-            -d working/free/protein_database.dmnd \
-            -q working/annotation/representatives.faa \
-            -o working/free/alignment.tsv \
+            -d {outdir}working/free/protein_database.dmnd \
+            -q {outdir}working/annotation/representatives.faa \
+            -o {outdir}working/free/alignment.tsv \
             --ultra-sensitive --top 10 --quiet \
             --outfmt 6 {get_blast_header()}"""
         process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
@@ -89,7 +89,7 @@ def run_bigg_aligner(logger, cores):
         
         
         
-def filter_alignment(logger, identity, coverage):
+def filter_alignment(logger, outdir, identity, coverage):
     
     
     # some log messages: 
@@ -99,7 +99,7 @@ def filter_alignment(logger, identity, coverage):
     
     # read the alignment
     header = get_blast_header().split(' ')
-    alignment = pnd.read_csv('working/free/alignment.tsv', sep='\t', names=header)
+    alignment = pnd.read_csv(f'{outdir}working/free/alignment.tsv', sep='\t', names=header)
 
 
     # filter based on alignment quality: 
@@ -184,7 +184,7 @@ def get_gene_combinations(r):
  
     
 
-def get_gprm_table(logger, refmodel=None): 
+def get_gprm_table(logger, outdir, refmodel=None): 
     
     
     # some log messages
@@ -230,7 +230,7 @@ def get_gprm_table(logger, refmodel=None):
 
         # save appendix to file: 
         gprm_appendix = pnd.DataFrame.from_records(gprm_appendix)
-        gprm_appendix.to_csv('working/free/gprm_appendix.csv')
+        gprm_appendix.to_csv(f'{outdir}working/free/gprm_appendix.csv')
         
         # concat the appendix
         gprm_table = pnd.concat([gprm_table, gprm_appendix], axis=0)
@@ -508,7 +508,7 @@ def add_exchange_reactions(logger, draft_panmodel):
     
 
 
-def eggnogg_gpr_inflator(logger, panmodel): 
+def eggnogg_gpr_inflator(logger, outdir, panmodel): 
     
     
     # some log messages:
@@ -516,7 +516,7 @@ def eggnogg_gpr_inflator(logger, panmodel):
     
     
     # load functional annotation:
-    annot = pnd.read_csv('working/annotation/pan.emapper.annotations', sep='\t', comment='#', header=None)
+    annot = pnd.read_csv(f'{outdir}working/annotation/pan.emapper.annotations', sep='\t', comment='#', header=None)
     annot.columns = 'query	seed_ortholog	evalue	score	eggNOG_OGs	max_annot_lvl	COG_category	Description	Preferred_name	GOs	EC	KEGG_ko	KEGG_Pathway	KEGG_Module	KEGG_Reaction	KEGG_rclass	BRITE	KEGG_TC	CAZy	BiGG_Reaction	PFAMs'.split('\t')
 
 
@@ -563,12 +563,12 @@ def eggnogg_gpr_inflator(logger, panmodel):
     
     
     # create a log subdirectory
-    os.makedirs('working/free/gpr_inflator', exist_ok=True)
+    os.makedirs(f'{outdir}working/free/gpr_inflator', exist_ok=True)
     
     
     # w_handler1: gids are divided by the number of alternatives.
     # w_handler2: gids are not divided (all together). 
-    w_handler2 = open(f'working/free/gpr_inflator/gid_to_cluster_all.txt', 'w') 
+    w_handler2 = open(f'{outdir}working/free/gpr_inflator/gid_to_cluster_all.txt', 'w') 
     
     
     # create a gid to alternatives dictionary, for later use: 
@@ -581,7 +581,7 @@ def eggnogg_gpr_inflator(logger, panmodel):
 
         
         # Number of admitted isoforms with the exact same eggnog-mapper annotation: 
-        w_handler1 = open(f'working/free/gpr_inflator/gid_to_cluster_{admitted_alts}.txt', 'w')
+        w_handler1 = open(f'{outdir}working/free/gpr_inflator/gid_to_cluster_{admitted_alts}.txt', 'w')
         
 
         # iterate the modeled genes:
@@ -636,7 +636,7 @@ def eggnogg_gpr_inflator(logger, panmodel):
 
     
     # iterate each reaction and edit the GPR accordingly:
-    w_handler = open(f'working/free/gpr_inflator/gpr_updates.txt', 'w')
+    w_handler = open(f'{outdir}working/free/gpr_inflator/gpr_updates.txt', 'w')
     for r in panmodel_update.reactions: 
 
         
@@ -686,11 +686,11 @@ def eggnogg_gpr_inflator(logger, panmodel):
 
 
 
-def network_rec(logger, cores, staining, identity, coverage, refmodel, refproteome):
+def network_rec(logger, outdir, cores, staining, identity, coverage, refmodel, refproteome):
     
     
     # create subdirs without overwriting
-    os.makedirs('working/free/', exist_ok=True)
+    os.makedirs(f'{outdir}working/free/', exist_ok=True)
     
     
     # some log messages
@@ -698,23 +698,23 @@ def network_rec(logger, cores, staining, identity, coverage, refmodel, refproteo
     
     
     # check if the needed files are already computed
-    if os.path.exists('working/free/proc_acc.pickle'):
-        with open('working/free/proc_acc.pickle', 'rb') as handler:
+    if os.path.exists(f'{outdir}working/free/proc_acc.pickle'):
+        with open(f'{outdir}working/free/proc_acc.pickle', 'rb') as handler:
             proc_acc = pickle.load(handler) 
-        if get_retained_accessions() == proc_acc:
+        if get_retained_accessions(outdir) == proc_acc:
             files_to_check = [
-                'working/free/alignment.tsv',
-                f'working/free/draft_panmodel_{identity}_{coverage}.json',
-                'working/free/gpr_inflator/gid_to_cluster_all.txt',
-                'working/free/gpr_inflator/gpr_updates.txt',
-                'working/free/reaction_scores.csv',
-                'working/free/reaction_scores_normalized.csv',
-                'working/free/protein_scores.csv',
-                'working/free/gene_scores.csv',
-                'working/free/gprm_appendix.csv',
-                'working/free/gprm_table.csv',
-                'working/free/protein_database.faa',
-                'working/free/protein_database.dmnd']
+                f'{outdir}working/free/alignment.tsv',
+                f'{outdir}working/free/draft_panmodel_{identity}_{coverage}.json',
+                f'{outdir}working/free/gpr_inflator/gid_to_cluster_all.txt',
+                f'{outdir}working/free/gpr_inflator/gpr_updates.txt',
+                f'{outdir}working/free/reaction_scores.csv',
+                f'{outdir}working/free/reaction_scores_normalized.csv',
+                f'{outdir}working/free/protein_scores.csv',
+                f'{outdir}working/free/gene_scores.csv',
+                f'{outdir}working/free/gprm_appendix.csv',
+                f'{outdir}working/free/gprm_table.csv',
+                f'{outdir}working/free/protein_database.faa',
+                f'{outdir}working/free/protein_database.dmnd']
             if all([os.path.exists(file) for file in files_to_check]):
                 # log some message: 
                 logger.info('Found all the needed files already computed. Skipping this step.')
@@ -723,42 +723,42 @@ def network_rec(logger, cores, staining, identity, coverage, refmodel, refproteo
 
     
     # create the protein database:
-    response = make_protein_database(logger, refmodel, refproteome)
+    response = make_protein_database(logger, outdir, refmodel, refproteome)
     if response == 1: return 1
     
     
     # align representatives sequences on BiGG genes:
-    run_bigg_aligner(logger, cores)
+    run_bigg_aligner(logger, outdir, cores)
     
     
     # filter HSPs based on inputted thresholds
-    alignment_filtered = filter_alignment(logger, identity, coverage)
+    alignment_filtered = filter_alignment(logger, outdir, identity, coverage)
     
     
     # get the list of all gene combinations that satisfy each reaction in each model
-    gprm_table = get_gprm_table(logger, refmodel)
+    gprm_table = get_gprm_table(logger, outdir, refmodel)
     if type(gprm_table) == int: return 1
-    gprm_table.to_csv('working/free/gprm_table.csv')
+    gprm_table.to_csv(f'{outdir}working/free/gprm_table.csv')
     
     
     # get the 'gene_scores' table:
     gene_scores = get_gene_scores_table(logger, alignment_filtered, gprm_table)
-    gene_scores.to_csv('working/free/gene_scores.csv')
+    gene_scores.to_csv(f'{outdir}working/free/gene_scores.csv')
     
     
     # get the 'protein_scores' table: 
     protein_scores = get_protein_scores_table(logger, gene_scores)
-    protein_scores.to_csv('working/free/protein_scores.csv')
+    protein_scores.to_csv(f'{outdir}working/free/protein_scores.csv')
     
     
     # get the 'reaction_scores' table: 
     reaction_scores = get_reaction_scores_table(logger, protein_scores)
-    reaction_scores.to_csv('working/free/reaction_scores.csv')
+    reaction_scores.to_csv(f'{outdir}working/free/reaction_scores.csv')
     
     
     # normalize reaction scores:
     reaction_scores_normalized = normalize_reaction_scores(reaction_scores)
-    reaction_scores_normalized.to_csv('working/free/reaction_scores_normalized.csv')
+    reaction_scores_normalized.to_csv(f'{outdir}working/free/reaction_scores_normalized.csv')
     
     
     # copy the gram pos / neg universe for subtraction: 
@@ -774,7 +774,7 @@ def network_rec(logger, cores, staining, identity, coverage, refmodel, refproteo
     
     
     # run gene recovery via functional annotation reading
-    draft_panmodel = eggnogg_gpr_inflator(logger, draft_panmodel) 
+    draft_panmodel = eggnogg_gpr_inflator(logger, outdir, draft_panmodel) 
     
     
     # add the ATPM reaction for reference-free reconstructions
@@ -784,7 +784,7 @@ def network_rec(logger, cores, staining, identity, coverage, refmodel, refproteo
     
     
     # save draft pan-model to disk
-    cobra.io.save_json_model(draft_panmodel, f'working/free/draft_panmodel_{identity}_{coverage}.json')
+    cobra.io.save_json_model(draft_panmodel, f'{outdir}working/free/draft_panmodel_{identity}_{coverage}.json')
     
     
     # some log messages
@@ -794,7 +794,7 @@ def network_rec(logger, cores, staining, identity, coverage, refmodel, refproteo
     # make traces to keep track of the accessions processed:
     # run_bigg_aligner(), first function to be called, works on annotation/representatives.faa,
     # so copy the 'proc_acc.pickle' inside annotation/
-    shutil.copyfile('working/annotation/proc_acc.pickle', 'working/free/proc_acc.pickle')
+    shutil.copyfile(f'{outdir}working/annotation/proc_acc.pickle', f'{outdir}working/free/proc_acc.pickle')
     
     
     return 0

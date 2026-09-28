@@ -259,13 +259,13 @@ def mancor_to_dict(logger, mancor):
     return resdict
 
  
-def expand_reference(refmodel, draft_panmodel, mancor): 
+def expand_reference(outdir, refmodel, draft_panmodel, mancor): 
     
     
     # begin the addition of new reactions to the refmodel, to form the final draft pan-model.
     reference_rids = [r.id for r in refmodel.reactions]
     results_df = []  # summarizing all the additions
-    addedms_logger = open('working/expansion/added_metabolites.txt', 'w')
+    addedms_logger = open(f'{outdir}working/expansion/added_metabolites.txt', 'w')
     for r in draft_panmodel.reactions:
         if r.id == 'Growth': continue  # using reference biomass definition
         if [g.id for g in r.genes] == ['spontaneous']: continue  # not interested in spontaneous reactions.
@@ -361,12 +361,12 @@ def expand_reference(refmodel, draft_panmodel, mancor):
     # save results dataframe to disk
     addedms_logger.close()
     results_df = pnd.DataFrame.from_records(results_df)
-    results_df.to_csv('working/expansion/results.csv')
+    results_df.to_csv(f'{outdir}working/expansion/results.csv')
     return results_df
 
     
     
-def ref_expansion(logger, refmodel, mancor, identity, coverage): 
+def ref_expansion(logger, outdir, refmodel, mancor, identity, coverage): 
     
     
     # log some message
@@ -374,7 +374,7 @@ def ref_expansion(logger, refmodel, mancor, identity, coverage):
     
     
     # create sub-directories without overwriting:
-    os.makedirs('working/expansion/', exist_ok=True)
+    os.makedirs(f'{outdir}working/expansion/', exist_ok=True)
     
     
     # check the existence of the manual corrections file:
@@ -393,17 +393,17 @@ def ref_expansion(logger, refmodel, mancor, identity, coverage):
             
     
     # check if the output was already computed
-    if os.path.exists('working/expansion/proc_acc.pickle'):
-        with open('working/expansion/proc_acc.pickle', 'rb') as handler:
+    if os.path.exists(f'{outdir}working/expansion/proc_acc.pickle'):
+        with open(f'{outdir}working/expansion/proc_acc.pickle', 'rb') as handler:
             proc_acc = pickle.load(handler) 
-        if get_retained_accessions() == proc_acc:
-            if os.path.exists(f'working/expansion/mancor.txt'):
-                md5_old = get_md5_string('working/expansion/mancor.txt')
+        if get_retained_accessions(outdir) == proc_acc:
+            if os.path.exists(f'{outdir}working/expansion/mancor.txt'):
+                md5_old = get_md5_string(f'{outdir}working/expansion/mancor.txt')
             else: md5_old = '-'  # fresh run , or previous run without mancor.
             if md5_old == md5_new:
-                if os.path.exists(f'working/expansion/draft_panmodel.json'):
-                    if os.path.exists(f'working/expansion/results.csv'):
-                        if os.path.exists(f'working/expansion/added_metabolites.txt'):
+                if os.path.exists(f'{outdir}working/expansion/draft_panmodel.json'):
+                    if os.path.exists(f'{outdir}working/expansion/results.csv'):
+                        if os.path.exists(f'{outdir}working/expansion/added_metabolites.txt'):
                             logger.info('Found all the needed files already computed. Skipping this step.')
                             # signal to skip this module:
                             return 0
@@ -424,12 +424,12 @@ def ref_expansion(logger, refmodel, mancor, identity, coverage):
     
     # load the reference and the reference-free reconstruction.
     refmodel_basename = os.path.basename(refmodel)
-    refmodel = cobra.io.load_json_model(f'working/brh/{refmodel_basename}.refmodel_translated.json')
-    draft_panmodel = cobra.io.load_json_model(f'working/free/draft_panmodel_{identity}_{coverage}.json')
+    refmodel = cobra.io.load_json_model(f'{outdir}working/brh/{refmodel_basename}.refmodel_translated.json')
+    draft_panmodel = cobra.io.load_json_model(f'{outdir}working/free/draft_panmodel_{identity}_{coverage}.json')
     
     
     # perform the main task
-    results_df = expand_reference(refmodel, draft_panmodel, mancor)
+    results_df = expand_reference(outdir, refmodel, draft_panmodel, mancor)
     draft_panmodel_exp = refmodel  # after the expansion
     logger.info(f"Done, {' '.join(['G:', str(len(draft_panmodel_exp.genes)), '|', 'R:', str(len(draft_panmodel_exp.reactions)), '|', 'M:', str(len(draft_panmodel_exp.metabolites))])}.")
     
@@ -441,17 +441,17 @@ def ref_expansion(logger, refmodel, mancor, identity, coverage):
     
     
     # finally save the new draft panmodel
-    cobra.io.save_json_model(draft_panmodel_exp, 'working/expansion/draft_panmodel.json')
-    logger.debug("New draft pan-model saved to 'working/expansion/draft_panmodel.json'.")
+    cobra.io.save_json_model(draft_panmodel_exp, f'{outdir}working/expansion/draft_panmodel.json')
+    logger.debug(f"New draft pan-model saved to '{outdir}working/expansion/draft_panmodel.json'.")
     
     
     # make traces to keep track of the accessions processed:
     # copy the one of brh/ , since the translated refmodelis the starting point
-    shutil.copyfile('working/brh/proc_acc.pickle', 'working/expansion/proc_acc.pickle')
-    if mancor_filepath != '-': shutil.copyfile(mancor_filepath, 'working/expansion/mancor.txt')
+    shutil.copyfile(f'{outdir}working/brh/proc_acc.pickle', f'{outdir}working/expansion/proc_acc.pickle')
+    if mancor_filepath != '-': shutil.copyfile(mancor_filepath, f'{outdir}working/expansion/mancor.txt')
     else:  # delete an eventual previous version: 
-        if os.path.exists(f'working/expansion/mancor.txt'):
-            os.remove(f'working/expansion/mancor.txt')
+        if os.path.exists(f'{outdir}working/expansion/mancor.txt'):
+            os.remove(f'{outdir}working/expansion/mancor.txt')
     
     
     return 0

@@ -21,23 +21,23 @@ from ..commons import get_blast_header
 
 
 
-def run_tcdb_aligner(logger, cores):
+def run_tcdb_aligner(logger, outdir, cores):
     
     
     # some log messages
     logger.debug("Copying the TCDB database...")
     with resources.path("gempipe.assets", "tcdb_proteins.dmnd") as asset_path:  
-        shutil.copyfile(asset_path, 'working/tcdb_transporters/tcdb_proteins.dmnd')
+        shutil.copyfile(asset_path, f'{outdir}working/tcdb_transporters/tcdb_proteins.dmnd')
     
     
     # some log messages
     logger.debug("Aligning to the TCDB genes database...")
     # run the command:
-    with open(f'working/logs/stdout_tcdbalign.txt', 'w') as stdout, open(f'working/logs/stderr_tcdbalign.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_tcdbalign.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_tcdbalign.txt', 'w') as stderr: 
         command = f"""diamond blastp --threads {cores} \
-            -d working/tcdb_transporters/tcdb_proteins.dmnd \
-            -q working/annotation/representatives.faa \
-            -o working/tcdb_transporters/tcdb_alignment.tsv \
+            -d {outdir}working/tcdb_transporters/tcdb_proteins.dmnd \
+            -q {outdir}working/annotation/representatives.faa \
+            -o {outdir}working/tcdb_transporters/tcdb_alignment.tsv \
             --ultra-sensitive --quiet \
             --outfmt 6 {get_blast_header()}"""
         # not "--top 10" to avoid competing families.
@@ -46,11 +46,11 @@ def run_tcdb_aligner(logger, cores):
 
 
 
-def filter_alignment(logger):
+def filter_alignment(logger, outdir):
     
     
     header = get_blast_header().split(' ')
-    alignment = pnd.read_csv('working/tcdb_transporters/tcdb_alignment.tsv', sep='\t', names=header)
+    alignment = pnd.read_csv(f'{outdir}working/tcdb_transporters/tcdb_alignment.tsv', sep='\t', names=header)
     
     identity = 45
     positivity = 60
@@ -288,11 +288,11 @@ def add_missing_exchanges(logger, model):
 
 
 
-def tcdbing_main(logger, cores, staining):
+def tcdbing_main(logger, outdir, cores, staining):
     
     
     # create subdirs without overwriting
-    os.makedirs('working/tcdb_transporters/', exist_ok=True)
+    os.makedirs(f'{outdir}working/tcdb_transporters/', exist_ok=True)
     
     
     # some log messages
@@ -307,58 +307,58 @@ def tcdbing_main(logger, cores, staining):
         
     
     # align representatives sequences on TCDB genes:
-    run_tcdb_aligner(logger, cores)
+    run_tcdb_aligner(logger, outdir, cores)
     
     
     # filter the alignment
-    alignment_filtered = filter_alignment(logger)
+    alignment_filtered = filter_alignment(logger, outdir)
 
     
     # get the 'gprm_table':
     with resources.path("gempipe.assets", "tcdb_gprs.csv") as asset_path:  
         gprm_table = pnd.read_csv(asset_path)
-    gprm_table.to_csv('working/tcdb_transporters/gprm_table.csv')
+    gprm_table.to_csv(f'{outdir}working/tcdb_transporters/gprm_table.csv')
     
     
     # get the 'gene_scores' table:
     gene_scores = get_gene_scores_table(logger, alignment_filtered, gprm_table)
-    gene_scores.to_csv('working/tcdb_transporters/gene_scores.csv')
+    gene_scores.to_csv(f'{outdir}working/tcdb_transporters/gene_scores.csv')
     
     
     # get the 'protein_scores' table: 
     protein_scores = get_protein_scores_table(logger, gene_scores)
-    protein_scores.to_csv('working/tcdb_transporters/protein_scores.csv')
+    protein_scores.to_csv(f'{outdir}working/tcdb_transporters/protein_scores.csv')
     
     
     # get the 'reaction_scores' table: 
     reaction_scores = get_reaction_scores_table(logger, protein_scores)
-    reaction_scores.to_csv('working/tcdb_transporters/reaction_scores.csv')
+    reaction_scores.to_csv(f'{outdir}working/tcdb_transporters/reaction_scores.csv')
     
     
     # normalize reaction scores:
     reaction_scores_normalized = normalize_reaction_scores(reaction_scores)
-    reaction_scores_normalized.to_csv('working/tcdb_transporters/reaction_scores_normalized.csv')
+    reaction_scores_normalized.to_csv(f'{outdir}working/tcdb_transporters/reaction_scores_normalized.csv')
     
     
     # matching alingment with precomputed reaction database ('tcdb_rs'):
     with resources.path("gempipe.assets", "tcdb_rs.csv") as asset_path:  
         tcdb_rs = pnd.read_csv(asset_path)
     matched = tcdb_matching(logger, tcdb_rs, reaction_scores_normalized)
-    matched.to_csv('working/tcdb_transporters/matched.csv', index=False)
+    matched.to_csv(f'{outdir}working/tcdb_transporters/matched.csv', index=False)
     
     
     # using 'matched', expand the reference draft pan-model.
     # The resulting model will REPLACE the 'working/duplicates/draft_panmodel.json'.
     # load draft panmodel:
-    panmodel = cobra.io.load_json_model('working/duplicates/draft_panmodel.json')
+    panmodel = cobra.io.load_json_model(f'{outdir}working/duplicates/draft_panmodel.json')
     uni = get_universe_template(logger, staining)
     logger.debug("Adding putative transporters...")
     panmodel, matched_added = add_putative_transporters(matched, panmodel, uni)
-    matched_added.to_csv('working/tcdb_transporters/matched_added.csv')
+    matched_added.to_csv(f'{outdir}working/tcdb_transporters/matched_added.csv')
     logger.debug("Adding missing exchanges...")
     add_missing_exchanges(logger, panmodel)
-    logger.debug("Replacing working/duplicates/draft_panmodel.json...")
-    cobra.io.save_json_model(panmodel, 'working/duplicates/draft_panmodel.json')
+    logger.debug(f"Replacing {outdir}working/duplicates/draft_panmodel.json...")
+    cobra.io.save_json_model(panmodel, f'{outdir}working/duplicates/draft_panmodel.json')
                                         
     
     # print some statistics:

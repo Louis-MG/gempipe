@@ -16,6 +16,9 @@ from .species import derive_species_specific
 from .reporting import create_derive_plots
 
 
+from ..commons import get_outdir
+
+
 
 def derive_all(logger, outdir, cores, panmodel, pam, report, gannots, media_filepath, minflux, biolog, sbml, skipgf, nofig, aux, cnps, cnps_minmed, biosynth):
     
@@ -114,9 +117,7 @@ def derive_command(args, logger):
     
     
     # create the main output directory: 
-    outdir = args.outdir
-    if outdir.endswith('/') == False: outdir = outdir + '/'
-    os.makedirs(outdir, exist_ok=True)
+    outdir = get_outdir(args.outdir)
     
     
     logger.info("Deriving strain- and species-specific metabolic models...")

@@ -14,7 +14,7 @@ from ..commons import update_metadata_manual
 
 
 
-def get_metadata_table(logger, rawmeta_filepath):
+def get_metadata_table(logger, outdir, rawmeta_filepath):
     
     
     # read the raw metadata: 
@@ -48,16 +48,16 @@ def get_metadata_table(logger, rawmeta_filepath):
     # save the metadata table to disk:
     metadata = remove_duplicated_strain_ids(metadata)
     metadata = metadata.sort_values(by=['organism_name', 'strain_isolate'], ascending=True)   # sort by species
-    metadata.to_csv("working/genomes/genomes.csv")
-    logger.info("Metadata table saved in ./working/genomes/genomes.csv.") 
+    metadata.to_csv(f"{outdir}working/genomes/genomes.csv")
+    logger.info(f"Metadata table saved in {outdir}working/genomes/genomes.csv.") 
     
 
 
-def create_genomes_dictionary(logger): 
+def create_genomes_dictionary(logger, outdir): 
     
     
     # read the metadata table
-    metadata = pnd.read_csv("working/genomes/genomes.csv", index_col=0)
+    metadata = pnd.read_csv(f"{outdir}working/genomes/genomes.csv", index_col=0)
     
     
     # create species-to-genome dictionary:
@@ -66,18 +66,18 @@ def create_genomes_dictionary(logger):
     for species in groups.keys():
         indexes = groups[species]
         subset_metadata = metadata.iloc[indexes, ]
-        species_to_genome[species] = [f'working/genomes/{accession}.fna' for accession in subset_metadata['assembly_accession']]
+        species_to_genome[species] = [f'{outdir}working/genomes/{accession}.fna' for accession in subset_metadata['assembly_accession']]
     logger.debug(f"Created the species-to-genome dictionary: {str(species_to_genome)}.") 
     
     
     # save the dictionary to disk: 
-    with open('working/genomes/species_to_genome.pickle', 'wb') as file:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'wb') as file:
         pickle.dump(species_to_genome, file)
-    logger.debug(f"Saved the species-to-genome dictionary to file: ./working/genomes/species_to_genome.pickle.")
+    logger.debug(f"Saved the species-to-genome dictionary to file: {outdir}working/genomes/species_to_genome.pickle.")
     
 
 
-def get_genomes(logger, taxids, cores): 
+def get_genomes(logger, outdir, taxids, cores): 
     
     
     # get metadata basename: 
@@ -87,50 +87,50 @@ def get_genomes(logger, taxids, cores):
     
     # execute the download
     logger.info("Downloading from NCBI all the genome assemblies linked to the provided taxids...")
-    with open('working/logs/stdout_download.txt', 'w') as stdout, open('working/logs/stderr_download.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_download.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_download.txt', 'w') as stderr: 
         command = f"""ncbi-genome-download \
             --no-cache \
-            --metadata-table working/genomes/{meta_basename}.txt \
+            --metadata-table {outdir}working/genomes/{meta_basename}.txt \
             --retries 100 --parallel 10 \
-            --output-folder working/genomes/ \
+            --output-folder {outdir}working/genomes/ \
             --species-taxids {taxids} \
             --formats assembly-stats,fasta \
             --section genbank \
             bacteria"""
         process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
         process.wait()
-    logger.debug("Download finished. Logs are stored in ./working/logs/stdout_download.txt and ./working/logs/stderr_download.txt.") 
+    logger.debug(f"Download finished. Logs are stored in {outdir}working/logs/stdout_download.txt and {outdir}working/logs/stderr_download.txt.") 
     
     
     # format the metadata
-    metadata = pnd.read_csv(f"working/genomes/{meta_basename}.txt", sep='\t')
-    metadata.to_csv(f"working/genomes/{meta_basename}.csv")
-    os.remove(f"working/genomes/{meta_basename}.txt")
+    metadata = pnd.read_csv(f"{outdir}working/genomes/{meta_basename}.txt", sep='\t')
+    metadata.to_csv(f"{outdir}working/genomes/{meta_basename}.csv")
+    os.remove(f"{outdir}working/genomes/{meta_basename}.txt")
     
     
     # moving the genomes to the right directory
-    for file in glob.glob('working/genomes/genbank/bacteria/*/*.fna.gz'):
+    for file in glob.glob(f'{outdir}working/genomes/genbank/bacteria/*/*.fna.gz'):
         accession = file.split('/')[-2]
-        shutil.copy(file, f'working/genomes/{accession}.fna.gz')
-    shutil.rmtree('working/genomes/genbank/') # delete the old tree
-    logger.debug("Moved the downloaded genomes to ./working/genomes/.") 
+        shutil.copy(file, f'{outdir}working/genomes/{accession}.fna.gz')
+    shutil.rmtree(f'{outdir}working/genomes/genbank/') # delete the old tree
+    logger.debug(f"Moved the downloaded genomes to {outdir}working/genomes/.") 
     
     
     # execute the decompression
     logger.info("Decompressing the genomes...")
-    with open('working/logs/stdout_decompression.txt', 'w') as stdout, open('working/logs/stderr_decompression.txt', 'w') as stderr: 
-        command = f"""unpigz -p {cores} working/genomes/*.fna.gz""" 
+    with open(f'{outdir}working/logs/stdout_decompression.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_decompression.txt', 'w') as stderr: 
+        command = f"""unpigz -p {cores} {outdir}working/genomes/*.fna.gz""" 
         process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
         process.wait()
-    logger.debug("Decompression finished. Logs are stored in ./working/logs/stdout_decompression.txt and ./working/logs/stderr_decompression.txt.") 
+    logger.debug(f"Decompression finished. Logs are stored in {outdir}working/logs/stdout_decompression.txt and {outdir}working/logs/stderr_decompression.txt.") 
     
     
 
-def download_genomes(logger, taxids, cores, metadata_man):
+def download_genomes(logger, outdir, taxids, cores, metadata_man):
     
     
     # create a sub-directory without overwriting
-    os.makedirs('working/genomes/', exist_ok=True)
+    os.makedirs(f'{outdir}working/genomes/', exist_ok=True)
     
     
     # get metadata basename: 
@@ -139,16 +139,16 @@ def download_genomes(logger, taxids, cores, metadata_man):
     
     
     # check if the genomes were already downloaded:
-    if os.path.exists(f'working/genomes/{meta_basename}.csv'):
-        metadata = pnd.read_csv(f"working/genomes/{meta_basename}.csv", index_col=0) 
-        if all([os.path.exists(f'working/genomes/{accession}.fna') for accession in metadata['assembly_accession']]):
+    if os.path.exists(f'{outdir}working/genomes/{meta_basename}.csv'):
+        metadata = pnd.read_csv(f"{outdir}working/genomes/{meta_basename}.csv", index_col=0) 
+        if all([os.path.exists(f'{outdir}working/genomes/{accession}.fna') for accession in metadata['assembly_accession']]):
             metadata = metadata[metadata['local_filename'].str.endswith('assembly_stats.txt')==False]  # keep only rows for genomes
             logger.info(f"Genome assemblies already downloaded for taxids {taxids}: {len(metadata['assembly_accession'])} assemblies found. Skipping the download from NCBI.")
  
             # create metadata table and genomes dictionary: 
-            get_metadata_table(logger, f'working/genomes/{meta_basename}.csv')
-            create_genomes_dictionary(logger)
-            response = update_metadata_manual(logger, metadata_man, source='species_to_genome')
+            get_metadata_table(logger, outdir, f'{outdir}working/genomes/{meta_basename}.csv')
+            create_genomes_dictionary(logger, outdir)
+            response = update_metadata_manual(logger, outdir, metadata_man, source='species_to_genome')
             if response==1: return 1
 
 
@@ -156,24 +156,24 @@ def download_genomes(logger, taxids, cores, metadata_man):
     
           
     # download from ncbi: 
-    get_genomes(logger, taxids, cores)
+    get_genomes(logger, outdir, taxids, cores)
 
     
     # create the metadata table and the genomes dictionary
-    get_metadata_table(logger, f'working/genomes/{meta_basename}.csv')
-    create_genomes_dictionary(logger)
-    response = update_metadata_manual(logger, metadata_man, source='species_to_genome')
+    get_metadata_table(logger, outdir, f'{outdir}working/genomes/{meta_basename}.csv')
+    create_genomes_dictionary(logger, outdir)
+    response = update_metadata_manual(logger, outdir, metadata_man, source='species_to_genome')
     if response==1: return 1
     
     return 0 
     
     
 
-def handle_manual_genomes(logger, genomes, metadata):
+def handle_manual_genomes(logger, outdir, genomes, metadata):
     
     
     # create a sub-directory without overwriting
-    os.makedirs('working/genomes/', exist_ok=True)
+    os.makedirs(f'{outdir}working/genomes/', exist_ok=True)
     
     
     # create a species-to-genome dictionary
@@ -213,25 +213,25 @@ def handle_manual_genomes(logger, genomes, metadata):
         copied_files = []
         for file in species_to_genome[species]:
             basename = os.path.basename(file)
-            shutil.copyfile(file, 'working/genomes/' + basename)  # just the content, not the permissions. 
-            copied_files.append('working/genomes/' + basename)
+            shutil.copyfile(file, f'{outdir}working/genomes/' + basename)  # just the content, not the permissions. 
+            copied_files.append(f'{outdir}working/genomes/' + basename)
         species_to_genome[species] = copied_files
-    logger.debug(f"Input genomes copied to ./working/genomes/.")
+    logger.debug(f"Input genomes copied to {outdir}working/genomes/.")
     logger.debug(f"Created the species-to-genome dictionary: {str(species_to_genome)}.") 
     
     
     # save the dictionary to disk: 
-    with open('working/genomes/species_to_genome.pickle', 'wb') as file:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'wb') as file:
         pickle.dump(species_to_genome, file)
-    logger.debug(f"Saved the species-to-genome dictionary to file: ./working/genomes/species_to_genome.pickle.")
+    logger.debug(f"Saved the species-to-genome dictionary to file: {outdir}working/genomes/species_to_genome.pickle.")
     
     
     
     # Create the genomes/genomes.csv like if genomes were downloaded from NCBI.
     # Useful during plot generation.
     # Warning: the same columns are used in get_metadata_table(). But here only 2 can be filled: 'organism_name' and 'strain_isolate'.
-    get_genomes_csv(source='species_to_genome')
-    response = update_metadata_manual(logger, metadata, source='species_to_genome')
+    get_genomes_csv(outdir, source='species_to_genome')
+    response = update_metadata_manual(logger, outdir, metadata, source='species_to_genome')
     if response==1: return 1
     
     

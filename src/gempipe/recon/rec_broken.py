@@ -19,12 +19,12 @@ from ..commons import get_blast_header
 
 
 
-def alignment_to_couples(accession, cluster_to_relfreq, seq_to_cluster): 
+def alignment_to_couples(outdir, accession, cluster_to_relfreq, seq_to_cluster): 
     
     
     # read the alignment with extra columns: 
     colnames = f'{get_blast_header()}'.split(' ')
-    alignment = pnd.read_csv(f'working/rec_broken/alignments/{accession}.tsv', sep='\t', names=colnames )
+    alignment = pnd.read_csv(f'{outdir}working/rec_broken/alignments/{accession}.tsv', sep='\t', names=colnames )
     alignment['qcov'] = round((alignment['qend'] -  alignment['qstart'] +1)/ alignment['qlen'] * 100, 1)
     alignment['scov'] = round((alignment['send'] -  alignment['sstart'] +1)/ alignment['slen'] * 100, 1)
     
@@ -114,14 +114,14 @@ def alignment_to_couples(accession, cluster_to_relfreq, seq_to_cluster):
     df_couples = pnd.concat(df_couples, axis=0)
     df_couples = df_couples.drop('prognum', axis=1)
     df_couples = df_couples.reset_index(drop=True)
-    df_couples.to_csv(f'working/rec_broken/couples/{accession}.csv')
+    df_couples.to_csv(f'{outdir}working/rec_broken/couples/{accession}.csv')
     
     
     return df_couples
 
 
     
-def get_updated_column(pam, accession, df_couples, cluster_to_relfreq, seq_to_cluster, seq_to_coords):
+def get_updated_column(outdir, pam, accession, df_couples, cluster_to_relfreq, seq_to_cluster, seq_to_coords):
     
     
     # this module will release a new updated pam.
@@ -135,7 +135,7 @@ def get_updated_column(pam, accession, df_couples, cluster_to_relfreq, seq_to_cl
     
     
     # parse each couple to trace the jumping of protein pieces:
-    with open(f'working/rec_broken/edits/{accession}.txt', "w") as w_handler:
+    with open(f'{outdir}working/rec_broken/edits/{accession}.txt', "w") as w_handler:
         groups = df_couples.groupby('sseqid').groups
         for cluster in groups.keys():
             couple = df_couples.iloc[ groups[cluster], ]
@@ -192,7 +192,7 @@ def get_updated_column(pam, accession, df_couples, cluster_to_relfreq, seq_to_cl
     
     
     # save the dictionary: 
-    with open(f'working/rec_broken/edits/{accession}.pickle', 'wb') as file:
+    with open(f'{outdir}working/rec_broken/edits/{accession}.pickle', 'wb') as file:
         pickle.dump(edits_dict, file)
     
     
@@ -208,6 +208,7 @@ def task_recbroken(genome, args):
     cluster_to_relfreq = args['cluster_to_relfreq']
     seq_to_cluster = args['seq_to_cluster']
     seq_to_coords = args['seq_to_coords']
+    outdir = args['outdir']
     # WARNING: seq_to_coords can be really heavy (eg 200 MB) when genomes are hundreds.
     # This can significanlty slow down the creation of child processess, and RAM comsumption can be really high.
     
@@ -215,13 +216,13 @@ def task_recbroken(genome, args):
     # get the accession and proteome file:
     basename = os.path.basename(genome)
     accession, _ = os.path.splitext(basename)
-    proteome = f'working/proteomes/{accession}.faa'
+    proteome = f'{outdir}working/proteomes/{accession}.faa'
     
     
     # create a database for later extraction of recovered sequences: 
-    os.makedirs(f'working/rec_broken/databases/{accession}/', exist_ok=True)
-    shutil.copyfile(genome, f'working/rec_broken/databases/{accession}/{accession}.fna')  # just the content, not the permissions.
-    command = f"""makeblastdb -in working/rec_broken/databases/{accession}/{accession}.fna -dbtype nucl -parse_seqids""" # '-parse_seqids' is required for 'blastdbcmd'.
+    os.makedirs(f'{outdir}working/rec_broken/databases/{accession}/', exist_ok=True)
+    shutil.copyfile(genome, f'{outdir}working/rec_broken/databases/{accession}/{accession}.fna')  # just the content, not the permissions.
+    command = f"""makeblastdb -in {outdir}working/rec_broken/databases/{accession}/{accession}.fna -dbtype nucl -parse_seqids""" # '-parse_seqids' is required for 'blastdbcmd'.
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     process.wait()
     
@@ -229,8 +230,8 @@ def task_recbroken(genome, args):
     # perform the blastp: proteins on representatives:  
     command = f'''blastp \
         -query {proteome} \
-        -db working/rec_broken/representatives/representatives.ren.faa \
-        -out working/rec_broken/alignments/{accession}.tsv \
+        -db {outdir}working/rec_broken/representatives/representatives.ren.faa \
+        -out {outdir}working/rec_broken/alignments/{accession}.tsv \
         -outfmt "6 {get_blast_header()}"
     '''
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -238,11 +239,11 @@ def task_recbroken(genome, args):
 
 
     # parse the alignment to get the good couples.
-    df_couples = alignment_to_couples(accession, cluster_to_relfreq, seq_to_cluster)
+    df_couples = alignment_to_couples(outdir, accession, cluster_to_relfreq, seq_to_cluster)
     
     
     # parse the good couples to update the pam column:
-    pam_column = get_updated_column(pam, accession, df_couples, cluster_to_relfreq, seq_to_cluster, seq_to_coords)
+    pam_column = get_updated_column(outdir, pam, accession, df_couples, cluster_to_relfreq, seq_to_cluster, seq_to_coords)
 
     
     # return new rows for load_the_worker():
@@ -252,13 +253,13 @@ def task_recbroken(genome, args):
     
     
 
-def populate_results_df(logger):
+def populate_results_df(logger, outdir):
     
     
     # load the previously created dictionaries: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
-    with open('working/coordinates/seq_to_coords.pickle', 'rb') as handler:
+    with open(f'{outdir}working/coordinates/seq_to_coords.pickle', 'rb') as handler:
         seq_to_coords = pickle.load(handler)
         
     
@@ -271,7 +272,7 @@ def populate_results_df(logger):
             
             
             # get the couple
-            df_couples = pnd.read_csv(f'working/rec_broken/couples/{accession}.csv', index_col=0)
+            df_couples = pnd.read_csv(f'{outdir}working/rec_broken/couples/{accession}.csv', index_col=0)
             groups = df_couples.groupby('sseqid').groups
             for cluster in groups.keys():
                 couple = df_couples.iloc[ groups[cluster], ]
@@ -335,18 +336,18 @@ def populate_results_df(logger):
                     'start': couple_start, 'end': couple_end
                 })
             results_df = pnd.DataFrame.from_records(results_df)
-            results_df.to_csv(f'working/rec_broken/results/{accession}.csv')
+            results_df.to_csv(f'{outdir}working/rec_broken/results/{accession}.csv')
     
     
     return 0
     
     
 
-def update_seq_to_coords(logger): 
+def update_seq_to_coords(logger, outdir): 
     
     
     # load the previously created species_to_proteome: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
         
     
@@ -362,12 +363,12 @@ def update_seq_to_coords(logger):
     # parse the couples/log files to get the seqs ID to erease:
     to_erease = []
     for accession in good_accessions: 
-        df_couples = pnd.read_csv(f'working/rec_broken/couples/{accession}.csv', index_col=0)
+        df_couples = pnd.read_csv(f'{outdir}working/rec_broken/couples/{accession}.csv', index_col=0)
         to_erease = to_erease + df_couples['qseqid'].to_list()
     
         
     # create an updateed seq_to_coords dict: 
-    with open('working/coordinates/seq_to_coords.pickle', 'rb') as handler:
+    with open(f'{outdir}working/coordinates/seq_to_coords.pickle', 'rb') as handler:
         seq_to_coords = pickle.load(handler)
     logger.debug(f'rec_broken: seq_to_coords: starting from {len(seq_to_coords.values())} sequences.')
     seq_to_coords_update = {}
@@ -386,23 +387,23 @@ def update_seq_to_coords(logger):
         
     # now add the new seqs (recovered by this module): 
     for accession in good_accessions: 
-        results_df = pnd.read_csv(f'working/rec_broken/results/{accession}.csv', index_col=0)
+        results_df = pnd.read_csv(f'{outdir}working/rec_broken/results/{accession}.csv', index_col=0)
         for index, row in results_df.iterrows():
             seq_to_coords_update[row['ID']] = {'accession': row['accession'], 'contig': row['contig'], 'strand': row['strand'], 'start': row['start'], 'end': row['end']}
     logger.debug(f'rec_broken: seq_to_coords: {len(seq_to_coords_update.values())} sequences after the addition of new IDs.')
 
     
     # save the update dictionary: 
-    with open('working/rec_broken/seq_to_coords.pickle', 'wb') as file:
+    with open(f'{outdir}working/rec_broken/seq_to_coords.pickle', 'wb') as file:
         pickle.dump(seq_to_coords_update, file)
         
         
         
-def join_edits_dict(logger):
+def join_edits_dict(logger, outdir):
     
     
     # load the previously created species_to_proteome: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
         
     
@@ -418,23 +419,23 @@ def join_edits_dict(logger):
     # parse the couples/log files to get the seqs ID to erease:
     edits_dict = {}
     for accession in good_accessions: 
-        with open(f'working/rec_broken/edits/{accession}.pickle', 'rb') as handler:
+        with open(f'{outdir}working/rec_broken/edits/{accession}.pickle', 'rb') as handler:
             curr_edits = pickle.load(handler)
         for key, value in curr_edits.items():
             edits_dict[key] = value
             
             
     # save the dictionary: 
-    with open(f'working/rec_broken/edits_dict.pickle', 'wb') as file:
+    with open(f'{outdir}working/rec_broken/edits_dict.pickle', 'wb') as file:
         pickle.dump(edits_dict, file)
         
         
 
-def update_sequences(logger): 
+def update_sequences(logger, outdir): 
     
     
     # load the previously created species_to_proteome: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
         
     
@@ -450,12 +451,12 @@ def update_sequences(logger):
     # parse the couples/log files to get the seqs ID to erease:
     to_erease = []
     for accession in accessions: 
-        df_couples = pnd.read_csv(f'working/rec_broken/couples/{accession}.csv', index_col=0)
+        df_couples = pnd.read_csv(f'{outdir}working/rec_broken/couples/{accession}.csv', index_col=0)
         to_erease = to_erease + df_couples['qseqid'].to_list()
             
             
     # create an updated df, removing the seqs to erease:
-    sequences_df = pnd.read_csv('working/clustering/sequences.csv' , index_col=0)
+    sequences_df = pnd.read_csv(f'{outdir}working/clustering/sequences.csv' , index_col=0)
     logger.debug(f'rec_broken: sequences dataframe: starting from {len(sequences_df)} sequences.')
     sequences_df_updated = sequences_df.copy()
     sequences_df_updated = sequences_df_updated.drop(to_erease)
@@ -465,14 +466,14 @@ def update_sequences(logger):
     # now add the new seqs
     new_rows = []
     for accession in accessions: 
-        results_df = pnd.read_csv(f'working/rec_broken/results/{accession}.csv', index_col=0)
+        results_df = pnd.read_csv(f'{outdir}working/rec_broken/results/{accession}.csv', index_col=0)
         for index, row in results_df.iterrows():
             contig = row['contig']
             strand = row['strand']
             start = row['start']
             end = row['end']
             seq, seq_tostop = extract_aa_seq_from_genome(
-                f'working/rec_broken/databases/{accession}/{accession}.fna', 
+                f'{outdir}working/rec_broken/databases/{accession}/{accession}.fna', 
                 contig, strand, start, end)
             new_rows.append({'cds': row['ID'], 'accession': accession, 'aaseq': seq})
     new_rows = pnd.DataFrame.from_records(new_rows)
@@ -483,11 +484,11 @@ def update_sequences(logger):
 
     
     # save the update version:
-    sequences_df_updated.to_csv('working/rec_broken/sequences.csv')
+    sequences_df_updated.to_csv(f'{outdir}working/rec_broken/sequences.csv')
     
 
 
-def recovery_broken(logger, cores):
+def recovery_broken(logger, outdir, cores):
     
     
     # some log messages:
@@ -495,46 +496,46 @@ def recovery_broken(logger, cores):
     
     
     # create sub-directories without overwriting:
-    os.makedirs('working/rec_broken/', exist_ok=True)
-    os.makedirs('working/rec_broken/edits/', exist_ok=True)
-    os.makedirs('working/rec_broken/representatives/', exist_ok=True)
-    os.makedirs('working/rec_broken/databases/', exist_ok=True)
-    os.makedirs(f'working/rec_broken/alignments/', exist_ok=True)
-    os.makedirs('working/rec_broken/couples/', exist_ok=True)
-    os.makedirs('working/rec_broken/results/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_broken/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_broken/edits/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_broken/representatives/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_broken/databases/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_broken/alignments/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_broken/couples/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_broken/results/', exist_ok=True)
     
     
     # check if it's everything pre-computed
     response = check_cached(
-        logger, pam_path='working/rec_broken/pam.csv',
-        summary_path='working/rec_broken/summary.csv',
+        logger, outdir, pam_path=f'{outdir}working/rec_broken/pam.csv',
+        summary_path=f'{outdir}working/rec_broken/summary.csv',
         imp_files = [
-            'working/rec_broken/sequences.csv',
-            'working/rec_broken/seq_to_coords.pickle',
-            'working/rec_broken/edits_dict.pickle',])
+            f'{outdir}working/rec_broken/sequences.csv',
+            f'{outdir}working/rec_broken/seq_to_coords.pickle',
+            f'{outdir}working/rec_broken/edits_dict.pickle',])
     if response == 0: 
         return 0
     
 
     # copy representative sequences (all) and make a database
-    shutil.copyfile(f'working/clustering/representatives.ren.faa', f'working/rec_broken/representatives/representatives.ren.faa') 
-    command = f"""makeblastdb -in working/rec_broken/representatives/representatives.ren.faa -dbtype prot"""
+    shutil.copyfile(f'{outdir}working/clustering/representatives.ren.faa', f'{outdir}working/rec_broken/representatives/representatives.ren.faa') 
+    command = f"""makeblastdb -in {outdir}working/rec_broken/representatives/representatives.ren.faa -dbtype prot"""
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     process.wait()
     
     
     # load the assets to form the args dictionary:
-    pam = pnd.read_csv('working/clustering/pam.csv', index_col=0)
-    with open('working/clustering/cluster_to_relfreq.pickle', 'rb') as handler:
+    pam = pnd.read_csv(f'{outdir}working/clustering/pam.csv', index_col=0)
+    with open(f'{outdir}working/clustering/cluster_to_relfreq.pickle', 'rb') as handler:
         cluster_to_relfreq = pickle.load(handler)
-    with open('working/clustering/seq_to_cluster.pickle', 'rb') as handler:
+    with open(f'{outdir}working/clustering/seq_to_cluster.pickle', 'rb') as handler:
         seq_to_cluster = pickle.load(handler)
-    with open('working/coordinates/seq_to_coords.pickle', 'rb') as handler:
+    with open(f'{outdir}working/coordinates/seq_to_coords.pickle', 'rb') as handler:
         seq_to_coords = pickle.load(handler)
     
     
     # load the previously created species_to_proteome: 
-    with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
         species_to_genome = pickle.load(handler)
         
         
@@ -562,7 +563,7 @@ def recovery_broken(logger, cores):
             itertools.repeat('accession'), 
             itertools.repeat(logger), 
             itertools.repeat(task_recbroken),  # will return a new updated pam.
-            itertools.repeat({'pam': pam, 'cluster_to_relfreq': cluster_to_relfreq, 'seq_to_cluster': seq_to_cluster, 'seq_to_coords': seq_to_coords}),
+            itertools.repeat({'pam': pam, 'cluster_to_relfreq': cluster_to_relfreq, 'seq_to_cluster': seq_to_cluster, 'seq_to_coords': seq_to_coords, 'outdir': outdir}),
         ), chunksize = 1)
     all_df_combined = gather_results(results)
     
@@ -579,28 +580,28 @@ def recovery_broken(logger, cores):
     empty_rows_df = pam_updated.loc[empty_rows_bool]
     logger.debug(f"rec_broken: ended up with {len(empty_rows_df)} devoided clusters.")
     pam_updated = pam_updated.drop(empty_rows_df.index)
-    pam_updated.to_csv('working/rec_broken/pam.csv')
+    pam_updated.to_csv(f'{outdir}working/rec_broken/pam.csv')
     
     
     # get the results dataframe following conventions
-    response = populate_results_df(logger)
+    response = populate_results_df(logger, outdir)
     if response == 1: return 1
 
     
     # update the squence to coordinates dict (removing filtered genomes, and protein frags)
-    update_seq_to_coords(logger)  # creates 'working/rec_broken/seq_to_coords.pickle'
+    update_seq_to_coords(logger, outdir)  # creates 'working/rec_broken/seq_to_coords.pickle'
     
     
     # update the sequences dataframe (removing protein frags)
-    update_sequences(logger)  # creates 'working/rec_broken/sequences.csv'
+    update_sequences(logger, outdir)  # creates 'working/rec_broken/sequences.csv'
     
     
     # join together all the strain specific edits dicts
-    join_edits_dict(logger)  # creates 'working/rec_broken/edits_dict.pickle'
+    join_edits_dict(logger, outdir)  # creates 'working/rec_broken/edits_dict.pickle'
     
     
     # create a summary for this module reading the results dataframes: 
-    create_summary(logger, module_dir='working/rec_broken/')
+    create_summary(logger, outdir, module_dir=f'{outdir}working/rec_broken/')
     
 
     

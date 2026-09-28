@@ -76,7 +76,7 @@ def get_translation_dictionary_mnx(model, mrmode='m'):
 
     
 
-def sort_translation_dictionary(to_translate, model, refmodel, reffree, mrmode='m'):
+def sort_translation_dictionary(outdir, to_translate, model, refmodel, reffree, mrmode='m'):
     
     
     # 'to_translate' contains duplicated metabolites divided in groups. 
@@ -202,14 +202,14 @@ def sort_translation_dictionary(to_translate, model, refmodel, reffree, mrmode='
         
         
     # save tabular results
-    if   mrmode=='m': results_df.to_csv('working/duplicates/dup_m_edits.csv')  
-    elif mrmode=='r': results_df.to_csv('working/duplicates/dup_r_edits.csv')  
+    if   mrmode=='m': results_df.to_csv(f'{outdir}working/duplicates/dup_m_edits.csv')  
+    elif mrmode=='r': results_df.to_csv(f'{outdir}working/duplicates/dup_r_edits.csv')  
         
     return to_translate_11
 
 
 
-def translate_targets(logger, model, to_translate, mancor):
+def translate_targets(logger, outdir, model, to_translate, mancor):
     # attemps to rewrite reactions in a model, in a way that duplicate metabolites are solved.
 
     
@@ -326,7 +326,7 @@ def translate_targets(logger, model, to_translate, mancor):
     
     # save tabular results: 
     results_df = pnd.DataFrame.from_records(results_df)
-    results_df.to_csv('working/duplicates/dup_m_translations.csv')
+    results_df.to_csv(f'{outdir}working/duplicates/dup_m_translations.csv')
 
 
 
@@ -343,7 +343,7 @@ def parse_disconnected_metabolites(logger, model):
 
 
 
-def remove_duplicated_and_set_gpr(model, to_translate): 
+def remove_duplicated_and_set_gpr(outdir, model, to_translate): 
     
     
     # first delete duplicated reactions: 
@@ -352,7 +352,7 @@ def remove_duplicated_and_set_gpr(model, to_translate):
     
     
     # then update gpr where needed: 
-    results_df = pnd.read_csv('working/duplicates/dup_r_edits.csv', index_col=0)
+    results_df = pnd.read_csv(f'{outdir}working/duplicates/dup_r_edits.csv', index_col=0)
     results_df = results_df[results_df['same_geneset']==False]
     results_df = results_df.reset_index(drop=True)
     groups = results_df.groupby('replacement').groups
@@ -366,7 +366,7 @@ def remove_duplicated_and_set_gpr(model, to_translate):
                                                   
 
 
-def solve_duplicates(logger, identity, coverage, refmodel, mancor_filepath):
+def solve_duplicates(logger, outdir, identity, coverage, refmodel, mancor_filepath):
     
     
     # log some message: 
@@ -374,21 +374,21 @@ def solve_duplicates(logger, identity, coverage, refmodel, mancor_filepath):
     
     
     # create subdirs without overwriting: 
-    os.makedirs('working/duplicates/', exist_ok=True)
+    os.makedirs(f'{outdir}working/duplicates/', exist_ok=True)
     
     
     # check presence of already computed files 
-    if os.path.exists(f'working/duplicates/draft_panmodel.json') and os.path.exists(f'working/duplicates/md5.pickle'):
-        if os.path.exists(f'working/duplicates/draft_panmodel_da.json') and os.path.exists(f'working/duplicates/md5_da.pickle'):
-            if os.path.exists(f'working/duplicates/draft_panmodel_da_dd.json') and os.path.exists(f'working/duplicates/md5_da_dd.pickle'):
-                with open('working/duplicates/md5.pickle', 'rb') as handler:
+    if os.path.exists(f'{outdir}working/duplicates/draft_panmodel.json') and os.path.exists(f'{outdir}working/duplicates/md5.pickle'):
+        if os.path.exists(f'{outdir}working/duplicates/draft_panmodel_da.json') and os.path.exists(f'{outdir}working/duplicates/md5_da.pickle'):
+            if os.path.exists(f'{outdir}working/duplicates/draft_panmodel_da_dd.json') and os.path.exists(f'{outdir}working/duplicates/md5_da_dd.pickle'):
+                with open(f'{outdir}working/duplicates/md5.pickle', 'rb') as handler:
                     md5 = pickle.load(handler)
-                with open('working/duplicates/md5_da.pickle', 'rb') as handler:
+                with open(f'{outdir}working/duplicates/md5_da.pickle', 'rb') as handler:
                     md5_da = pickle.load(handler)
-                with open('working/duplicates/md5_da_dd.pickle', 'rb') as handler:
+                with open(f'{outdir}working/duplicates/md5_da_dd.pickle', 'rb') as handler:
                     md5_da_dd = pickle.load(handler)
                 # compare md5:
-                if md5 == md5_da == md5_da_dd == get_md5_string('working/duplicates/draft_panmodel.json'):
+                if md5 == md5_da == md5_da_dd == get_md5_string(f'{outdir}working/duplicates/draft_panmodel.json'):
                     # log some message: 
                     logger.info('Found all the needed files already computed. Skipping this step.')
                     # signal to skip this module:
@@ -396,11 +396,11 @@ def solve_duplicates(logger, identity, coverage, refmodel, mancor_filepath):
     
     
     # load the needed models: 
-    draft_panmodel = cobra.io.load_json_model('working/duplicates/draft_panmodel_da.json')
-    reffree = cobra.io.load_json_model(f'working/free/draft_panmodel_{identity}_{coverage}.json')
+    draft_panmodel = cobra.io.load_json_model(f'{outdir}working/duplicates/draft_panmodel_da.json')
+    reffree = cobra.io.load_json_model(f'{outdir}working/free/draft_panmodel_{identity}_{coverage}.json')
     if refmodel != '-':
         refmodel_basename = os.path.basename(refmodel)
-        refmodel = cobra.io.load_json_model(f'working/brh/{refmodel_basename}.refmodel_translated.json')
+        refmodel = cobra.io.load_json_model(f'{outdir}working/brh/{refmodel_basename}.refmodel_translated.json')
     else: refmodel = cobra.Model('__EMPTY__')
     
     
@@ -420,8 +420,8 @@ def solve_duplicates(logger, identity, coverage, refmodel, mancor_filepath):
     # solve duplicated metabolites:
     logger.info("Detecting duplicate metabolites using MetaNetX annotations...")
     to_translate = get_translation_dictionary_mnx(draft_panmodel, mrmode='m')  # 1-to-many 
-    to_translate = sort_translation_dictionary(to_translate, draft_panmodel, refmodel, reffree, mrmode='m')  # 1-to-1
-    translate_targets(logger, draft_panmodel, to_translate, mancor)
+    to_translate = sort_translation_dictionary(outdir, to_translate, draft_panmodel, refmodel, reffree, mrmode='m')  # 1-to-1
+    translate_targets(logger, outdir, draft_panmodel, to_translate, mancor)
     parse_disconnected_metabolites(logger, draft_panmodel)
     
     
@@ -435,17 +435,17 @@ def solve_duplicates(logger, identity, coverage, refmodel, mancor_filepath):
     # solve duplicated reactions:
     logger.info("Detecting duplicate reactions using MetaNetX annotations...")
     to_translate = get_translation_dictionary_mnx(draft_panmodel, mrmode='r')  # 1-to-many 
-    to_translate = sort_translation_dictionary(to_translate, draft_panmodel, refmodel, reffree, mrmode='r')  # 1-to-1
-    remove_duplicated_and_set_gpr(draft_panmodel, to_translate)
+    to_translate = sort_translation_dictionary(outdir, to_translate, draft_panmodel, refmodel, reffree, mrmode='r')  # 1-to-1
+    remove_duplicated_and_set_gpr(outdir, draft_panmodel, to_translate)
     
     
     # save deduplicated model
-    cobra.io.save_json_model(draft_panmodel, f'working/duplicates/draft_panmodel_da_dd.json')
+    cobra.io.save_json_model(draft_panmodel, f'{outdir}working/duplicates/draft_panmodel_da_dd.json')
     
         
     # trace the parent model md5:
-    parent_md5 = get_md5_string('working/duplicates/draft_panmodel.json')
-    with open('working/duplicates/md5_da_dd.pickle', 'wb') as handle:
+    parent_md5 = get_md5_string(f'{outdir}working/duplicates/draft_panmodel.json')
+    with open(f'{outdir}working/duplicates/md5_da_dd.pickle', 'wb') as handle:
         pickle.dump(parent_md5, handle)
         
         

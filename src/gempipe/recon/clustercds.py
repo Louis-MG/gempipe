@@ -11,11 +11,11 @@ from ..commons import check_cached
 
 
 
-def create_combined(logger):
+def create_combined(logger, outdir):
     
     
     # read which proteomes passed the filters: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
     proteomes = []  # get the proteomes to parse
     for species in species_to_proteome.keys(): 
@@ -75,21 +75,21 @@ def create_combined(logger):
 
 
     # write a single fasta with all proteins from all strains
-    os.makedirs('working/clustering/', exist_ok=True)
-    with open('working/clustering/combined.faa', 'w') as w_handler: 
+    os.makedirs(f'{outdir}working/clustering/', exist_ok=True)
+    with open(f'{outdir}working/clustering/combined.faa', 'w') as w_handler: 
         count = SeqIO.write(sr_list, w_handler, "fasta")
 
         
         # write the protein dataframe to file: 
         sequences_df = pnd.DataFrame.from_records(sequences_df)
         sequences_df = sequences_df.set_index('cds', verify_integrity=True)
-        sequences_df.to_csv('working/clustering/sequences.csv')
+        sequences_df.to_csv(f'{outdir}working/clustering/sequences.csv')
         
         
         # write dictionaries to file:
-        with open('working/clustering/acc_to_seqs.pickle', 'wb') as file:
+        with open(f'{outdir}working/clustering/acc_to_seqs.pickle', 'wb') as file:
             pickle.dump(acc_to_seqs, file)
-        with open('working/clustering/seq_to_acc.pickle', 'wb') as file:
+        with open(f'{outdir}working/clustering/seq_to_acc.pickle', 'wb') as file:
             pickle.dump(seq_to_acc, file)
         
         
@@ -101,7 +101,7 @@ def create_combined(logger):
 
     
 
-def perform_clustering(logger, cores): 
+def perform_clustering(logger, outdir, cores): 
     
     
     # some log messages: 
@@ -109,12 +109,12 @@ def perform_clustering(logger, cores):
 
 
     # launch the command: 
-    with open(f'working/logs/stdout_clustering.txt', 'w') as stdout, open(f'working/logs/stderr_clustering.txt', 'w') as stderr:
+    with open(f'{outdir}working/logs/stdout_clustering.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_clustering.txt', 'w') as stderr:
         # -d 0: keep the entire sequence ID in the .clstr file
         command = f"""cd-hit \
             -T {cores} -M 0 \
-            -i working/clustering/combined.faa \
-            -o working/clustering/representatives.faa \
+            -i {outdir}working/clustering/combined.faa \
+            -o {outdir}working/clustering/representatives.faa \
             -g 1 -aL 0.70 -aS 0.70 -c 0.90 -d 0"""
         process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
         process.wait()
@@ -132,7 +132,7 @@ def perform_clustering(logger, cores):
     
     
     # parse the clstr_file
-    with open('working/clustering/representatives.faa.clstr', 'r') as handler:
+    with open(f'{outdir}working/clustering/representatives.faa.clstr', 'r') as handler:
         rows = handler.readlines()
         for row in rows: 
             
@@ -155,34 +155,34 @@ def perform_clustering(logger, cores):
                 
 
     # Write the dictionaries to file:
-    with open('working/clustering/cluster_to_seqs.pickle', 'wb') as handler:
+    with open(f'{outdir}working/clustering/cluster_to_seqs.pickle', 'wb') as handler:
         pickle.dump(cluster_to_seqs, handler)
-    with open('working/clustering/cluster_to_rep.pickle', 'wb') as handler:
+    with open(f'{outdir}working/clustering/cluster_to_rep.pickle', 'wb') as handler:
         pickle.dump(cluster_to_rep, handler)
-    with open('working/clustering/seq_to_cluster.pickle', 'wb') as handler:
+    with open(f'{outdir}working/clustering/seq_to_cluster.pickle', 'wb') as handler:
         pickle.dump(seq_to_cluster, handler)
         
         
     # load previously created seq_to_acc dictionary: 
-    with open('working/clustering/seq_to_acc.pickle', 'rb') as handler:
+    with open(f'{outdir}working/clustering/seq_to_acc.pickle', 'rb') as handler:
         seq_to_acc = pickle.load(handler)
         
         
     # create the dictionary rep-to-aaseq:
     rep_to_aaseq = {}
-    with open('working/clustering/representatives.faa', 'r') as r_handler: 
+    with open(f'{outdir}working/clustering/representatives.faa', 'r') as r_handler: 
         for seqrecord in SeqIO.parse(r_handler, "fasta"):
             seq = seqrecord.seq # <class 'Bio.Seq.Seq'>
             seqid = seqrecord.id
             rep_to_aaseq[seqid] = str(seq)
-    with open('working/clustering/rep_to_aaseq.pickle', 'wb') as handler:
+    with open(f'{outdir}working/clustering/rep_to_aaseq.pickle', 'wb') as handler:
         pickle.dump(rep_to_aaseq, handler)
         
         
     # rename the representative sequences:
-    with open('working/clustering/representatives.ren.faa', 'w') as w_handler:
+    with open(f'{outdir}working/clustering/representatives.ren.faa', 'w') as w_handler:
         sr_list = []
-        with open('working/clustering/representatives.faa', 'r') as r_handler: 
+        with open(f'{outdir}working/clustering/representatives.faa', 'r') as r_handler: 
             for seqrecord in SeqIO.parse(r_handler, "fasta"):
                 seq = seqrecord.seq # <class 'Bio.Seq.Seq'>
                 seqid = seqrecord.id
@@ -201,13 +201,13 @@ def perform_clustering(logger, cores):
 
 
 
-def create_pam(logger):
+def create_pam(logger, outdir):
     
     
     # load previously created dictionaries: 
-    with open('working/clustering/cluster_to_seqs.pickle', 'rb') as handler:
+    with open(f'{outdir}working/clustering/cluster_to_seqs.pickle', 'rb') as handler:
         cluster_to_seqs = pickle.load(handler)
-    with open('working/clustering/seq_to_acc.pickle', 'rb') as handler:
+    with open(f'{outdir}working/clustering/seq_to_acc.pickle', 'rb') as handler:
         seq_to_acc = pickle.load(handler)
     
     
@@ -235,7 +235,7 @@ def create_pam(logger):
     # write the pam to disk
     pam = pnd.DataFrame.from_records(rows)
     pam = pam.set_index('cluster', verify_integrity=True)
-    pam.to_csv('working/clustering/pam.csv')
+    pam.to_csv(f'{outdir}working/clustering/pam.csv')
     
     
     # some log messages: 
@@ -249,7 +249,7 @@ def create_pam(logger):
         suffixes = [i for i in pam[acc].to_list() if type(i) != float]
         suffix = list(set([i.split('_', 1)[0] for i in suffixes]))[0]
         acc_to_suffix[acc] = suffix
-    with open('working/clustering/acc_to_suffix.pickle', 'wb') as handler:
+    with open(f'{outdir}working/clustering/acc_to_suffix.pickle', 'wb') as handler:
         pickle.dump(acc_to_suffix, handler)
         
         
@@ -258,7 +258,7 @@ def create_pam(logger):
     cluster_to_absfreq = pam.apply(lambda col: col.map(lambda x: 1 if (type(x) != float and x != '') else 0)).sum(axis=1)
     cluster_to_relfreq = round(cluster_to_absfreq / len(pam.columns) * 100, 1)
     cluster_to_relfreq = cluster_to_relfreq.to_dict()
-    with open('working/clustering/cluster_to_relfreq.pickle', 'wb') as handler:
+    with open(f'{outdir}working/clustering/cluster_to_relfreq.pickle', 'wb') as handler:
         pickle.dump(cluster_to_relfreq, handler)
     
     
@@ -266,7 +266,7 @@ def create_pam(logger):
         
 
 
-def compute_clusters(logger, cores): 
+def compute_clusters(logger, outdir, cores): 
     
     
     # some log messages:
@@ -275,33 +275,33 @@ def compute_clusters(logger, cores):
     
     # check if it's everything pre-computed
     response = check_cached(
-        logger, pam_path='working/clustering/pam.csv', 
+        logger, outdir, pam_path=f'{outdir}working/clustering/pam.csv', 
         imp_files=[
-            'working/clustering/acc_to_seqs.pickle',
-            'working/clustering/cluster_to_rep.pickle',
-            'working/clustering/cluster_to_seqs.pickle',
-            'working/clustering/seq_to_acc.pickle',
-            'working/clustering/seq_to_cluster.pickle',
-            'working/clustering/acc_to_suffix.pickle',
-            'working/clustering/cluster_to_relfreq.pickle',
-            'working/clustering/rep_to_aaseq.pickle',
-            'working/clustering/representatives.ren.faa',
-            'working/clustering/sequences.csv'])
+            f'{outdir}working/clustering/acc_to_seqs.pickle',
+            f'{outdir}working/clustering/cluster_to_rep.pickle',
+            f'{outdir}working/clustering/cluster_to_seqs.pickle',
+            f'{outdir}working/clustering/seq_to_acc.pickle',
+            f'{outdir}working/clustering/seq_to_cluster.pickle',
+            f'{outdir}working/clustering/acc_to_suffix.pickle',
+            f'{outdir}working/clustering/cluster_to_relfreq.pickle',
+            f'{outdir}working/clustering/rep_to_aaseq.pickle',
+            f'{outdir}working/clustering/representatives.ren.faa',
+            f'{outdir}working/clustering/sequences.csv'])
     if response == 0: return 0
     
     
     # combine together all the sequences from all the strains: 
-    response = create_combined(logger)
+    response = create_combined(logger, outdir)
     if response == 1: return 1
     
     
     # perform the clustering 
-    response = perform_clustering(logger, cores)
+    response = perform_clustering(logger, outdir, cores)
     if response == 1: return 1
     
     
     # creating the presence/absence matrix (PAM)
-    response = create_pam(logger)
+    response = create_pam(logger, outdir)
     if response == 1: return 1
     
     

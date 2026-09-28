@@ -27,6 +27,7 @@ def task_brh(proteome, args):
     
     # retrive the arguments:
     ref_proteome = args['ref_proteome']
+    outdir = args['outdir']
     
     
     # get the basename without extension:
@@ -35,30 +36,30 @@ def task_brh(proteome, args):
     
     
     # create subdir without overwriting: 
-    os.makedirs(f'working/brh/{accession}/', exist_ok=True)
-    os.makedirs(f'working/brh/{accession}/dbs/reference/', exist_ok=True)
-    os.makedirs(f'working/brh/{accession}/dbs/{accession}/', exist_ok=True)
+    os.makedirs(f'{outdir}working/brh/{accession}/', exist_ok=True)
+    os.makedirs(f'{outdir}working/brh/{accession}/dbs/reference/', exist_ok=True)
+    os.makedirs(f'{outdir}working/brh/{accession}/dbs/{accession}/', exist_ok=True)
             
     
     # create blast database for reference: 
-    shutil.copyfile(ref_proteome, f'working/brh/{accession}/dbs/reference/ref_proteome.faa')  # just the content, not the permissions.  
-    command = f"""makeblastdb -in working/brh/{accession}/dbs/reference/ref_proteome.faa -dbtype prot"""
+    shutil.copyfile(ref_proteome, f'{outdir}working/brh/{accession}/dbs/reference/ref_proteome.faa')  # just the content, not the permissions.  
+    command = f"""makeblastdb -in {outdir}working/brh/{accession}/dbs/reference/ref_proteome.faa -dbtype prot"""
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     process.wait()
 
     
     # create blast database for current strain:
-    shutil.copyfile(proteome, f'working/brh/{accession}/dbs/{accession}/{accession}.faa')  # just the content, not the permissions.    
-    command = f"""makeblastdb -in working/brh/{accession}/dbs/{accession}/{accession}.faa -dbtype prot"""
+    shutil.copyfile(proteome, f'{outdir}working/brh/{accession}/dbs/{accession}/{accession}.faa')  # just the content, not the permissions.    
+    command = f"""makeblastdb -in {outdir}working/brh/{accession}/dbs/{accession}/{accession}.faa -dbtype prot"""
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     process.wait()
     
 
     # perform blastp for reference-on-accession: 
     command = f'''blastp \
-        -query working/brh/{accession}/dbs/reference/ref_proteome.faa \
-        -db working/brh/{accession}/dbs/{accession}/{accession}.faa \
-        -out working/brh/{accession}/align_ref_vs_acc.tsv \
+        -query {outdir}working/brh/{accession}/dbs/reference/ref_proteome.faa \
+        -db {outdir}working/brh/{accession}/dbs/{accession}/{accession}.faa \
+        -out {outdir}working/brh/{accession}/align_ref_vs_acc.tsv \
         -outfmt "6 {get_blast_header()}"
     '''
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -67,9 +68,9 @@ def task_brh(proteome, args):
 
     # perform blastp for accession-on-reference: 
     command = f'''blastp \
-        -query working/brh/{accession}/dbs/{accession}/{accession}.faa \
-        -db working/brh/{accession}/dbs/reference/ref_proteome.faa \
-        -out working/brh/{accession}/align_acc_vs_ref.tsv \
+        -query {outdir}working/brh/{accession}/dbs/{accession}/{accession}.faa \
+        -db {outdir}working/brh/{accession}/dbs/reference/ref_proteome.faa \
+        -out {outdir}working/brh/{accession}/align_acc_vs_ref.tsv \
         -outfmt "6 {get_blast_header()}"
     '''
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -78,15 +79,15 @@ def task_brh(proteome, args):
 
     # read both the alignments:
     header = f"{get_blast_header()}".split(' ')
-    align_ref_vs_acc = pnd.read_csv(f'working/brh/{accession}/align_ref_vs_acc.tsv', names=header, sep='\t')
+    align_ref_vs_acc = pnd.read_csv(f'{outdir}working/brh/{accession}/align_ref_vs_acc.tsv', names=header, sep='\t')
     align_ref_vs_acc['qcov'] = round((align_ref_vs_acc['qend'] -  align_ref_vs_acc['qstart'] +1)/ align_ref_vs_acc['qlen'] * 100, 1)
-    align_acc_vs_ref = pnd.read_csv(f'working/brh/{accession}/align_acc_vs_ref.tsv', names=header, sep='\t')
+    align_acc_vs_ref = pnd.read_csv(f'{outdir}working/brh/{accession}/align_acc_vs_ref.tsv', names=header, sep='\t')
     align_acc_vs_ref['qcov'] = round((align_acc_vs_ref['qend'] -  align_acc_vs_ref['qstart'] +1)/ align_acc_vs_ref['qlen'] * 100, 1)
     
     
     # save the alignments in a more readible formt:
-    align_ref_vs_acc.to_csv(f'working/brh/{accession}_align_ref_vs_acc.csv')
-    align_acc_vs_ref.to_csv(f'working/brh/{accession}_align_acc_vs_ref.csv')
+    align_ref_vs_acc.to_csv(f'{outdir}working/brh/{accession}_align_ref_vs_acc.csv')
+    align_acc_vs_ref.to_csv(f'{outdir}working/brh/{accession}_align_acc_vs_ref.csv')
     
 
     # parse the alignments
@@ -124,11 +125,11 @@ def task_brh(proteome, args):
     # save results to disk
     ref_proteome_basename = os.path.basename(ref_proteome)
     results_df = pnd.DataFrame.from_records(results_df)
-    results_df.to_csv(f'working/brh/{accession}_brh_{ref_proteome_basename}.csv')
+    results_df.to_csv(f'{outdir}working/brh/{accession}_brh_{ref_proteome_basename}.csv')
     
     
     # save disk space removeing databases: 
-    shutil.rmtree(f'working/brh/{accession}/') 
+    shutil.rmtree(f'{outdir}working/brh/{accession}/') 
     
     
     # return a row for the dataframe
@@ -136,13 +137,13 @@ def task_brh(proteome, args):
     
 
 
-def create_refgid_to_clusters(logger, refmodel_basename, ref_proteome_basename, edits_dict): 
+def create_refgid_to_clusters(logger, outdir, refmodel_basename, ref_proteome_basename, edits_dict): 
     
     
     # load the previously created doctionaries: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
-    with open('working/clustering/seq_to_cluster.pickle', 'rb') as handler:
+    with open(f'{outdir}working/clustering/seq_to_cluster.pickle', 'rb') as handler:
         seq_to_cluster = pickle.load(handler)
         
         
@@ -159,7 +160,7 @@ def create_refgid_to_clusters(logger, refmodel_basename, ref_proteome_basename, 
                 logger.error("Each 'cds' should appear just one time in 'create_refgid_to_clusters()'.")
             cds_to_newcluster[cds] = new_cluster    
     # save the dictionary: 
-    with open(f'working/brh/cds_to_newcluster.pickle', 'wb') as handler:
+    with open(f'{outdir}working/brh/cds_to_newcluster.pickle', 'wb') as handler:
         pickle.dump(cds_to_newcluster, handler)
     
     
@@ -172,7 +173,7 @@ def create_refgid_to_clusters(logger, refmodel_basename, ref_proteome_basename, 
     
             
             # read the brh results for this accession: 
-            df_result = pnd.read_csv(f'working/brh/{accession}_brh_{ref_proteome_basename}.csv', index_col=0)
+            df_result = pnd.read_csv(f'{outdir}working/brh/{accession}_brh_{ref_proteome_basename}.csv', index_col=0)
             df_result = df_result.set_index('cds', drop=True, verify_integrity=True)
             
             
@@ -197,12 +198,12 @@ def create_refgid_to_clusters(logger, refmodel_basename, ref_proteome_basename, 
 
 
     # save the dictionary: 
-    with open(f'working/brh/{refmodel_basename}.refgid_to_clusters.pickle', 'wb') as handler:
+    with open(f'{outdir}working/brh/{refmodel_basename}.refgid_to_clusters.pickle', 'wb') as handler:
         pickle.dump(refgid_to_clusters, handler)
         
         
         
-def translate_refmodel(logger, refmodel, ref_proteome, refspont): 
+def translate_refmodel(logger, outdir, refmodel, ref_proteome, refspont): 
     
     
     # load the model according to the file type
@@ -221,7 +222,7 @@ def translate_refmodel(logger, refmodel, ref_proteome, refspont):
     
     # save the reference model in a standard format
     logger.debug("Saving a copy of the reference model in JSON format...")
-    cobra.io.save_json_model(refmodel, f'working/brh/{refmodel_basename}.refmodel_original.json') # ext can be repeated.
+    cobra.io.save_json_model(refmodel, f'{outdir}working/brh/{refmodel_basename}.refmodel_original.json') # ext can be repeated.
     
     
     # create a copy, later translated
@@ -254,7 +255,7 @@ def translate_refmodel(logger, refmodel, ref_proteome, refspont):
 
 
     # load the refgid_to_clusters dictionary (1-to-many)
-    with open(f'working/brh/{refmodel_basename}.refgid_to_clusters.pickle', 'rb') as handler:
+    with open(f'{outdir}working/brh/{refmodel_basename}.refgid_to_clusters.pickle', 'rb') as handler:
         refgid_to_clusters = pickle.load(handler)
     
         
@@ -300,13 +301,13 @@ def translate_refmodel(logger, refmodel, ref_proteome, refspont):
         recovered_translations = {}
         
         # load the translation dict (also take into account the 'broken' proteins)
-        with open('working/clustering/seq_to_cluster.pickle', 'rb') as handler:
+        with open(f'{outdir}working/clustering/seq_to_cluster.pickle', 'rb') as handler:
             seq_to_cluster = pickle.load(handler)
-        with open(f'working/brh/cds_to_newcluster.pickle', 'rb') as handler:
+        with open(f'{outdir}working/brh/cds_to_newcluster.pickle', 'rb') as handler:
             cds_to_newcluster = pickle.load(handler)
         
         # iterate the 'good' accessions
-        with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+        with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
             species_to_proteome = pickle.load(handler)
         for species in species_to_proteome.keys():
             for proteome in species_to_proteome[species]: 
@@ -314,7 +315,7 @@ def translate_refmodel(logger, refmodel, ref_proteome, refspont):
                 accession, _ = os.path.splitext(basename)
 
                 # read the brh results for this accession: 
-                ref_vs_acc = pnd.read_csv(f'working/brh/{accession}_align_ref_vs_acc.csv', index_col=0)
+                ref_vs_acc = pnd.read_csv(f'{outdir}working/brh/{accession}_align_ref_vs_acc.csv', index_col=0)
                 
                 # get the best match for each 'gid':
                 for gid in no_brh_gids:
@@ -384,14 +385,14 @@ def translate_refmodel(logger, refmodel, ref_proteome, refspont):
     
     # save the reference model in a standard format
     logger.debug("Saving a copy of the converted reference model in JSON format...")
-    cobra.io.save_json_model(refmodel_t, f'working/brh/{refmodel_basename}.refmodel_translated.json')  # ext can be repeated.
+    cobra.io.save_json_model(refmodel_t, f'{outdir}working/brh/{refmodel_basename}.refmodel_translated.json')  # ext can be repeated.
     
     
     return 0
     
     
 
-def perform_brh(logger, cores, ref_proteome): 
+def perform_brh(logger, outdir, cores, ref_proteome): 
     
     
     # some log messages:
@@ -402,11 +403,11 @@ def perform_brh(logger, cores, ref_proteome):
     
     
     # create sub-directories without overwriting:
-    os.makedirs('working/brh/', exist_ok=True)
+    os.makedirs(f'{outdir}working/brh/', exist_ok=True)
 
     
     # load the previously created species_to_genome: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
     
 
@@ -417,9 +418,9 @@ def perform_brh(logger, cores, ref_proteome):
         for proteome in species_to_proteome[species]:
             basename = os.path.basename(proteome)
             accession, _ = os.path.splitext(basename)
-            results_presence.append(os.path.exists(f'working/brh/{accession}_brh_{ref_proteome_basename}.csv'))
-            results_presence.append(os.path.exists(f'working/brh/{accession}_align_ref_vs_acc.csv'))
-            results_presence.append(os.path.exists(f'working/brh/{accession}_align_acc_vs_ref.csv'))
+            results_presence.append(os.path.exists(f'{outdir}working/brh/{accession}_brh_{ref_proteome_basename}.csv'))
+            results_presence.append(os.path.exists(f'{outdir}working/brh/{accession}_align_ref_vs_acc.csv'))
+            results_presence.append(os.path.exists(f'{outdir}working/brh/{accession}_align_acc_vs_ref.csv'))
     if all(results_presence): 
         # log some message: 
         logger.info('Found all the needed files already computed. Skipping this step.')
@@ -451,7 +452,7 @@ def perform_brh(logger, cores, ref_proteome):
             itertools.repeat('accession'), 
             itertools.repeat(logger), 
             itertools.repeat(task_brh), 
-            itertools.repeat({'ref_proteome': ref_proteome}),
+            itertools.repeat({'ref_proteome': ref_proteome, 'outdir': outdir}),
         ), chunksize = 1)
     all_df_combined = gather_results(results)
     
@@ -465,7 +466,7 @@ def perform_brh(logger, cores, ref_proteome):
 
 
 
-def convert_reference(logger, refmodel, ref_proteome, gene_recovery, refspont):
+def convert_reference(logger, outdir, refmodel, ref_proteome, gene_recovery, refspont):
     
     
     # some log messages:
@@ -480,13 +481,13 @@ def convert_reference(logger, refmodel, ref_proteome, gene_recovery, refspont):
     
     
     # check if it's everything pre-computed
-    if os.path.exists('working/brh/proc_acc.pickle'):
-        with open('working/brh/proc_acc.pickle', 'rb') as handler:
+    if os.path.exists(f'{outdir}working/brh/proc_acc.pickle'):
+        with open(f'{outdir}working/brh/proc_acc.pickle', 'rb') as handler:
             proc_acc = pickle.load(handler) 
-        if get_retained_accessions() == proc_acc:
-            if os.path.exists(f'working/brh/{refmodel_basename}.refmodel_original.json'):
-                if os.path.exists(f'working/brh/{refmodel_basename}.refmodel_translated.json'):
-                    if os.path.exists(f'working/brh/{refmodel_basename}.refgid_to_clusters.pickle'):
+        if get_retained_accessions(outdir) == proc_acc:
+            if os.path.exists(f'{outdir}working/brh/{refmodel_basename}.refmodel_original.json'):
+                if os.path.exists(f'{outdir}working/brh/{refmodel_basename}.refmodel_translated.json'):
+                    if os.path.exists(f'{outdir}working/brh/{refmodel_basename}.refgid_to_clusters.pickle'):
                         # log some message: 
                         logger.info('Found all the needed files already computed. Skipping this step.')
                         # signal to skip this module:
@@ -496,17 +497,17 @@ def convert_reference(logger, refmodel, ref_proteome, gene_recovery, refspont):
     # create a dictionary ref_seq-to-clusters, parsing the BRHs. 
     ref_proteome_basename = os.path.basename(ref_proteome)
     if not gene_recovery: edits_dict = None  # load the 'edits_dict'
-    else: edits_dict = pickle.load(open('working/rec_broken/edits_dict.pickle', 'rb'))
-    create_refgid_to_clusters(logger, refmodel_basename, ref_proteome_basename, edits_dict)
+    else: edits_dict = pickle.load(open(f'{outdir}working/rec_broken/edits_dict.pickle', 'rb'))
+    create_refgid_to_clusters(logger, outdir, refmodel_basename, ref_proteome_basename, edits_dict)
     
     
     # get a copy of the refmodel, and translate its genes to clusters notation. 
-    response = translate_refmodel(logger, refmodel, ref_proteome, refspont)
+    response = translate_refmodel(logger, outdir, refmodel, ref_proteome, refspont)
     if response == 1: return 1
 
 
     # make traces to keep track of the accessions processed:
-    shutil.copyfile('working/annotation/proc_acc.pickle', 'working/brh/proc_acc.pickle')
+    shutil.copyfile(f'{outdir}working/annotation/proc_acc.pickle', f'{outdir}working/brh/proc_acc.pickle')
     
     
     return 0

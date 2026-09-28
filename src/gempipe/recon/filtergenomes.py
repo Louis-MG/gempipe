@@ -26,6 +26,7 @@ def task_bmetrics(proteome, args):
         
     # retrive the arguments:
     buscodb = args['buscodb']
+    outdir = args['outdir']
 
 
     # get the basename without extension:
@@ -34,15 +35,15 @@ def task_bmetrics(proteome, args):
 
 
     # launch the command
-    with open(f'working/logs/stdout_bmetrics_{accession}.txt', 'w') as stdout, open(f'working/logs/stderr_bmetrics_{accession}.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_bmetrics_{accession}.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_bmetrics_{accession}.txt', 'w') as stderr: 
         command = f"""busco -f --cpu 1 --offline \
             -i {proteome} \
             --mode proteins \
             --lineage_dataset {buscodb} \
-            --download_path working/bmetrics/db/ \
-            --out_path working/bmetrics/ \
+            --download_path {outdir}working/bmetrics/db/ \
+            --out_path {outdir}working/bmetrics/ \
             --out {accession}"""
-        process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
+        process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr, cwd=f'{outdir}working/bmetrics/')  # busco writes its logs in the CWD
         process.wait()
 
 
@@ -51,7 +52,7 @@ def task_bmetrics(proteome, args):
 
 
 
-def compute_bmetrics(logger, cores, buscodb): 
+def compute_bmetrics(logger, outdir, cores, buscodb): 
     
     
     # logger message
@@ -59,13 +60,13 @@ def compute_bmetrics(logger, cores, buscodb):
     
     
     # load the previously created species_to_proteome: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
         
     
     # check if the metrics were already computed: 
-    if os.path.exists('working/filtering/bmetrics.csv'):
-        bmetrics_df = pnd.read_csv('working/filtering/bmetrics.csv', index_col=0)
+    if os.path.exists(f'{outdir}working/filtering/bmetrics.csv'):
+        bmetrics_df = pnd.read_csv(f'{outdir}working/filtering/bmetrics.csv', index_col=0)
         presence_list = []
         for species in species_to_proteome.keys(): 
             for proteome in species_to_proteome[species]:
@@ -79,7 +80,7 @@ def compute_bmetrics(logger, cores, buscodb):
     
     
     # create the worlder for biological metrics: 
-    os.makedirs('working/bmetrics/', exist_ok=True)
+    os.makedirs(f'{outdir}working/bmetrics/', exist_ok=True)
     
     
     # check if the user specified a database
@@ -89,12 +90,12 @@ def compute_bmetrics(logger, cores, buscodb):
     
     # assuring the presence of the specified database
     logger.debug("Downloading the specified BUSCO database...")
-    with open(f'working/logs/stdout_bmetrics_dbdownload.txt', 'w') as stdout, open(f'working/logs/stderr_bmetrics_dbdownload.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_bmetrics_dbdownload.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_bmetrics_dbdownload.txt', 'w') as stderr: 
         command = f"""busco -f \
-            --download_path working/bmetrics/db/ \
-            --out_path working/bmetrics/ \
+            --download_path {outdir}working/bmetrics/db/ \
+            --out_path {outdir}working/bmetrics/ \
             --download {buscodb}"""
-        process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
+        process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr, cwd=f'{outdir}working/bmetrics/')  # busco writes its logs in the CWD
         process.wait()
     logger.debug(f"Download completed for {buscodb}.")
         
@@ -123,7 +124,7 @@ def compute_bmetrics(logger, cores, buscodb):
             itertools.repeat('accession'), 
             itertools.repeat(logger), 
             itertools.repeat(task_bmetrics),
-            itertools.repeat({'buscodb': buscodb}),
+            itertools.repeat({'buscodb': buscodb, 'outdir': outdir}),
         ), chunksize = 1)
     all_df_combined = gather_results(results)  # all_df_combined can be ignored.
     
@@ -140,9 +141,8 @@ def compute_bmetrics(logger, cores, buscodb):
     # collect the short summaries:
     logger.debug("Gathering the short summaries...")
     bmetrics_df = []  
-    for file in glob.glob(f"working/bmetrics/*/run_{buscodb}/short_summary.json"): 
-        accession = file.replace('working/bmetrics/', '')
-        accession = accession.replace(f'/run_{buscodb}/short_summary.json', '')
+    for file in glob.glob(f"{outdir}working/bmetrics/*/run_{buscodb}/short_summary.json"): 
+        accession = file.split('/')[-3]  # '.../bmetrics/<accession>/run_<buscodb>/short_summary.json'
         jsonout = json.load(open(file, 'r'))
         
         
@@ -169,14 +169,13 @@ def compute_bmetrics(logger, cores, buscodb):
             'n_markers': jsonout['results']['n_markers']
         })
     bmetrics_df = pnd.DataFrame.from_records(bmetrics_df)
-    os.makedirs('working/filtering/', exist_ok=True)
-    bmetrics_df.to_csv('working/filtering/bmetrics.csv')
-    logger.debug("Biological metrics saved to ./working/filtering/bmetrics.csv.")
+    os.makedirs(f'{outdir}working/filtering/', exist_ok=True)
+    bmetrics_df.to_csv(f'{outdir}working/filtering/bmetrics.csv')
+    logger.debug(f"Biological metrics saved to {outdir}working/filtering/bmetrics.csv.")
     
     
     # cleaning the workspace from useless files: 
-    shutil.rmtree('working/bmetrics/')
-    for file in glob.glob('./busco_*.log'): os.remove(file)
+    shutil.rmtree(f'{outdir}working/bmetrics/')
     logger.debug("Removed useless files.")
     
     
@@ -184,7 +183,7 @@ def compute_bmetrics(logger, cores, buscodb):
 
 
 
-def compute_tmetrics(logger, cores):
+def compute_tmetrics(logger, outdir, cores):
     
     
     # logger message
@@ -192,13 +191,13 @@ def compute_tmetrics(logger, cores):
     
     
     # load the previously created species_to_genome: 
-    with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
         species_to_genome = pickle.load(handler)
         
         
     # check if the metrics were already computed: 
-    if os.path.exists('working/filtering/tmetrics.csv'):
-        tmetrics_df = pnd.read_csv('working/filtering/tmetrics.csv', index_col=0)
+    if os.path.exists(f'{outdir}working/filtering/tmetrics.csv'):
+        tmetrics_df = pnd.read_csv(f'{outdir}working/filtering/tmetrics.csv', index_col=0)
         presence_list = []
         for species in species_to_genome.keys(): 
             for genome in species_to_genome[species]:
@@ -219,24 +218,24 @@ def compute_tmetrics(logger, cores):
 
             
     # launch the command
-    with open(f'working/logs/stdout_tmetrics.txt', 'w') as stdout, open(f'working/logs/stderr_tmetrics.txt', 'w') as stderr: 
+    with open(f'{outdir}working/logs/stdout_tmetrics.txt', 'w') as stdout, open(f'{outdir}working/logs/stderr_tmetrics.txt', 'w') as stderr: 
         command = f"""seqkit stats \
             --tabular \
             --basename \
             --all \
             --threads {cores} \
-            --out-file working/filtering/tmetrics.csv \
+            --out-file {outdir}working/filtering/tmetrics.csv \
             {' '.join(genome_files)}"""
         process = subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
         process.wait()
         
         
     # format the table:
-    tmetrics_df = pnd.read_csv('working/filtering/tmetrics.csv', sep='\t')
+    tmetrics_df = pnd.read_csv(f'{outdir}working/filtering/tmetrics.csv', sep='\t')
     tmetrics_df = tmetrics_df.rename(columns={'file': 'accession', 'num_seqs': 'ncontigs'})
     tmetrics_df['accession'] = tmetrics_df['accession'].apply(lambda x: os.path.splitext(x)[0])
-    tmetrics_df.to_csv('working/filtering/tmetrics.csv')
-    logger.debug("Technical metrics saved to ./working/filtering/tmetrics.csv.")
+    tmetrics_df.to_csv(f'{outdir}working/filtering/tmetrics.csv')
+    logger.debug(f"Technical metrics saved to {outdir}working/filtering/tmetrics.csv.")
                 
                 
     # logger message:
@@ -250,9 +249,9 @@ def compute_tmetrics(logger, cores):
 def figure_bmetrics(logger, outdir, bad_genomes): 
     
     
-    logger.info("Producing figure for biological metrics in {outdir}/figures/bmetrics.png...")
+    logger.info(f"Producing figure for biological metrics in {outdir}/figures/bmetrics.png...")
     
-    df = get_allmeta_df()
+    df = get_allmeta_df(outdir)
 
     # create new col to show filtering: 
     df['excluded'] = 0
@@ -288,7 +287,7 @@ def figure_bmetrics(logger, outdir, bad_genomes):
     if len(df) <= 100:
         plt.savefig(outdir + 'figures/bmetrics.png', dpi=300, bbox_inches='tight')
     else:
-        logger.info("Number of genomes is >100: producing the SVG version instead {outdir}/figures/bmetrics.svg...")
+        logger.info(f"Number of genomes is >100: producing the SVG version instead {outdir}/figures/bmetrics.svg...")
         plt.savefig(outdir + 'figures/bmetrics.svg', bbox_inches='tight')
 
         
@@ -298,10 +297,10 @@ def figure_tmetrics(logger, outdir, bad_genomes):
     
     
     for tmetric in ['ncontigs', 'N50', 'sum_len']: 
-        logger.info(f"Producing figure for technical metric {tmetric} in {{outdir}}/figures/{tmetric}.png...")
+        logger.info(f"Producing figure for technical metric {tmetric} in {outdir}/figures/{tmetric}.png...")
     
     
-        df = get_allmeta_df()
+        df = get_allmeta_df(outdir)
         df['sum_len'] = df['sum_len'].apply(lambda x: x / 1000 / 1000)  # convert to Mb
         
         # create new col to show filtering: 
@@ -334,7 +333,7 @@ def figure_tmetrics(logger, outdir, bad_genomes):
         if len(df) <= 100:
             plt.savefig(outdir + f'figures/{tmetric}.png', dpi=300, bbox_inches='tight')
         else:
-            logger.info("Number of genomes is >100: producing the SVG version instead {outdir}/figures/" + f"{tmetric}.svg...")
+            logger.info(f"Number of genomes is >100: producing the SVG version instead {outdir}/figures/" + f"{tmetric}.svg...")
             plt.savefig(outdir + f'figures/{tmetric}.svg', bbox_inches='tight')
 
             
@@ -344,18 +343,18 @@ def filter_genomes(logger, cores, buscodb, buscoM, buscoF, ncontigs, N50, outdir
     
     
     # compoute biological metrics: 
-    response = compute_bmetrics(logger, cores, buscodb)
+    response = compute_bmetrics(logger, outdir, cores, buscodb)
     if response == 1: return 1
     
     
     # compute technical metrics: 
-    response = compute_tmetrics(logger, cores)
+    response = compute_tmetrics(logger, outdir, cores)
     if response == 1: return 1
     
     
     # read the metrics tables
-    bmetrics_df = pnd.read_csv('working/filtering/bmetrics.csv', index_col=0)
-    tmetrics_df = pnd.read_csv('working/filtering/tmetrics.csv', index_col=0)
+    bmetrics_df = pnd.read_csv(f'{outdir}working/filtering/bmetrics.csv', index_col=0)
+    tmetrics_df = pnd.read_csv(f'{outdir}working/filtering/tmetrics.csv', index_col=0)
     
     
     # get the number of Busco's scingle-copy orthologs: 
@@ -383,9 +382,9 @@ def filter_genomes(logger, cores, buscodb, buscoM, buscoF, ncontigs, N50, outdir
         
     
     # load the previously created dictionaries: 
-    with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
         species_to_genome = pickle.load(handler)
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
     
     
@@ -407,9 +406,9 @@ def filter_genomes(logger, cores, buscodb, buscoM, buscoF, ncontigs, N50, outdir
                 bad_quality.append(genome)
     logger.info(f"Found {len(bad_quality)} bad quality genomes. They will be ignored in subsequent analysis. Use --verbose to see the list.")
                 
-    with open('working/genomes/species_to_genome.pickle', 'wb') as file:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'wb') as file:
         pickle.dump(species_to_genome_new, file)
-    with open('working/proteomes/species_to_proteome.pickle', 'wb') as file:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'wb') as file:
         pickle.dump(species_to_proteome_new, file)
         
         

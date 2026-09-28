@@ -33,7 +33,7 @@ from gempipe.interface.gaps import add_demand
 
 
 
-def get_Rset_dataframe(panmodel, reaction_scores, refmodel, universe):
+def get_Rset_dataframe(outdir, panmodel, reaction_scores, refmodel, universe):
     # The Rset_dataframe is a table listing all the reaction that are currently NOT part of the draft panmodel.
     # These missing reactions may come (1) from the reference model, or (2) from the universe model.
     # The Rset_dataframe will also report lb, ub, n_score (normalized score), and penalty for each of these reactions. 
@@ -90,14 +90,14 @@ def get_Rset_dataframe(panmodel, reaction_scores, refmodel, universe):
     Rset_dataframe = pnd.DataFrame.from_records(Rset_dataframe)
     Rset_dataframe = Rset_dataframe.set_index('rid', drop=True, verify_integrity=True)
     Rset_dataframe = Rset_dataframe.sort_values(by='penalty', ascending=True)  # top scoring on top.
-    Rset_dataframe.to_csv('working/gapfilling/Rset_dataframe.csv')
+    Rset_dataframe.to_csv(f'{outdir}working/gapfilling/Rset_dataframe.csv')
     
     
     return Rset_dataframe
 
 
 
-def create_extended_universe(logger, panmodel, Rset_dataframe, refmodel, universe, mancor_filepath):
+def create_extended_universe(logger, outdir, panmodel, Rset_dataframe, refmodel, universe, mancor_filepath):
     # create an 'all_model', starting from the draft pan model, 
     # adding all the missing reactions both from the reference and the universe.
     expanded_universe = panmodel.copy()
@@ -108,7 +108,7 @@ def create_extended_universe(logger, panmodel, Rset_dataframe, refmodel, univers
     
     # below we use the add_new_reaction() function from refexpansion.py.
     # Therefore we need the same 'addedms_logger', and 'mancor'.
-    addedms_logger = open('working/gapfilling/candidate_metabolites.txt', 'w')
+    addedms_logger = open(f'{outdir}working/gapfilling/candidate_metabolites.txt', 'w')
     if mancor_filepath != '-': # existence of the file was verified in gempipe.recon
         mancor = mancor_to_dict(logger, mancor_filepath)  # mancor formatting was already veryfied in gempipe.recon
     else: mancor = {'formulas': {}, 'charges': {}, 'reactions': {}, 'blacklist': []}  # emtpy, easier to handle
@@ -146,7 +146,7 @@ def create_extended_universe(logger, panmodel, Rset_dataframe, refmodel, univers
         
 
     # save 'expanded_universe' to feed the later gapfilling.    
-    cobra.io.save_json_model(expanded_universe, 'working/gapfilling/expanded_universe.json')
+    cobra.io.save_json_model(expanded_universe, f'{outdir}working/gapfilling/expanded_universe.json')
     addedms_logger.close()   # close filestream.
     
     
@@ -154,33 +154,33 @@ def create_extended_universe(logger, panmodel, Rset_dataframe, refmodel, univers
 
 
     
-def build_universe_candidates(logger, panmodel, refmodel, refproteome, staining, mancor_filepath):
+def build_universe_candidates(logger, outdir, panmodel, refmodel, refproteome, staining, mancor_filepath):
     # here we basically performe another reaction score computation, like in the 
     # reference-free reconstruction, but this time we do not filter the alignment
     # (or we use really relaxed thresholds):
     logger.debug('Computing new reaction scores used relaxed alignment...')
-    alignment_filtered = filter_alignment(logger, identity=10, coverage=40)
+    alignment_filtered = filter_alignment(logger, outdir, identity=10, coverage=40)
     
     
     # load gprm table (gene-to-protein_complex-to-reaction-to-model)
-    gprm_table = pnd.read_csv('working/free/gprm_table.csv')
+    gprm_table = pnd.read_csv(f'{outdir}working/free/gprm_table.csv')
     
     
     # get the 'gene_scores' table:
     gene_scores = get_gene_scores_table(logger, alignment_filtered, gprm_table)
-    gene_scores.to_csv('working/gapfilling/gene_scores.csv')
+    gene_scores.to_csv(f'{outdir}working/gapfilling/gene_scores.csv')
                  
     # get the 'protein_scores' table: 
     protein_scores = get_protein_scores_table(logger, gene_scores)
-    protein_scores.to_csv('working/gapfilling/protein_scores.csv')
+    protein_scores.to_csv(f'{outdir}working/gapfilling/protein_scores.csv')
                  
     # get the 'reaction_scores' table: 
     reaction_scores = get_reaction_scores_table(logger, protein_scores)
-    reaction_scores.to_csv('working/gapfilling/reaction_scores.csv')
+    reaction_scores.to_csv(f'{outdir}working/gapfilling/reaction_scores.csv')
                  
     # normalize reaction scores:
     reaction_scores_normalized = normalize_reaction_scores(reaction_scores)
-    reaction_scores_normalized.to_csv('working/gapfilling/reaction_scores_normalized.csv')
+    reaction_scores_normalized.to_csv(f'{outdir}working/gapfilling/reaction_scores_normalized.csv')
     
     
     # load reference model (if any):
@@ -197,19 +197,19 @@ def build_universe_candidates(logger, panmodel, refmodel, refproteome, staining,
         
     # get the set of universal + reference reactions that are not yet in the draft panmodel
     logger.debug('Gathering candidate gap-filling reactions...')
-    Rset_dataframe = get_Rset_dataframe(panmodel, reaction_scores_normalized, refmodel, universe)
+    Rset_dataframe = get_Rset_dataframe(outdir, panmodel, reaction_scores_normalized, refmodel, universe)
         
         
     # add the missing reactions to the panmodel, in order to produce a single, expanded universe.
     logger.debug('Building the expanded universe...')
-    expanded_universe = create_extended_universe(logger, panmodel, Rset_dataframe, refmodel, universe, mancor_filepath)
+    expanded_universe = create_extended_universe(logger, outdir, panmodel, Rset_dataframe, refmodel, universe, mancor_filepath)
     
     
     return Rset_dataframe, expanded_universe
     
         
     
-def check_expuni_growth(logger, expanded_universe, media): 
+def check_expuni_growth(logger, outdir, expanded_universe, media): 
     
     
     # log some message:
@@ -237,10 +237,10 @@ def check_expuni_growth(logger, expanded_universe, media):
 
         # raise error if it cannot grow:
         if not can_growth:
-            cobra.io.save_json_model(expanded_universe, 'working/gapfilling/expuni_nogrowth.json')
+            cobra.io.save_json_model(expanded_universe, f'{outdir}working/gapfilling/expuni_nogrowth.json')
             logger.error(  # log the error message: 
                 f"The medium definition '{medium_name}' is unable to support growth of the 'expanded_universe'. " +
-                f"A copy of the 'expanded_universe', trying to grow on the '{medium_name}', is saved in 'working/gapfilling/expuni_nogrowth.json' for you to fix the '{medium_name}' definition.")
+                f"A copy of the 'expanded_universe', trying to grow on the '{medium_name}', is saved in '{outdir}working/gapfilling/expuni_nogrowth.json' for you to fix the '{medium_name}' definition.")
             return 1
         
         
@@ -374,11 +374,11 @@ def check_modeled_ingredients(logger, panmodel, staining, media):
     
     
 
-def prio_gapfiller(logger, refmodel, refproteome, staining, mancor_filepath, media_filepath, minpanflux):
+def prio_gapfiller(logger, outdir, refmodel, refproteome, staining, mancor_filepath, media_filepath, minpanflux):
     
     
     # create subdirs without overwriting
-    os.makedirs('working/gapfilling/', exist_ok=True)
+    os.makedirs(f'{outdir}working/gapfilling/', exist_ok=True)
     
     
     # some log messages
@@ -386,7 +386,7 @@ def prio_gapfiller(logger, refmodel, refproteome, staining, mancor_filepath, med
     
     
     # load draft panmodel: 
-    panmodel = cobra.io.load_json_model('working/duplicates/draft_panmodel.json')
+    panmodel = cobra.io.load_json_model(f'{outdir}working/duplicates/draft_panmodel.json')
     logger.debug(f"Starting with content: G {len(panmodel.genes)} R {len(panmodel.reactions)} M {len(panmodel.metabolites)}")
     
     
@@ -415,11 +415,11 @@ def prio_gapfiller(logger, refmodel, refproteome, staining, mancor_filepath, med
     
     
     # build the condidate gap-filler list (Rset) and the expanded universe
-    Rset_dataframe, expanded_universe = build_universe_candidates(logger, panmodel, refmodel, refproteome, staining, mancor_filepath)
+    Rset_dataframe, expanded_universe = build_universe_candidates(logger, outdir, panmodel, refmodel, refproteome, staining, mancor_filepath)
     
     
     # check if the 'expanded_universe' can grow in the given list of media.
-    response = check_expuni_growth(logger, expanded_universe, media)
+    response = check_expuni_growth(logger, outdir, expanded_universe, media)
     if response == 1: return 1
             
     
@@ -429,7 +429,7 @@ def prio_gapfiller(logger, refmodel, refproteome, staining, mancor_filepath, med
     
     
     # OVERWRITE draft pan-model (originally created by gempipe.recon.draft_reconstruction())
-    cobra.io.save_json_model(panmodel, f'working/duplicates/draft_panmodel.json')
+    cobra.io.save_json_model(panmodel, f'{outdir}working/duplicates/draft_panmodel.json')
     logger.debug(f"Ending with content: G {len(panmodel.genes)} R {len(panmodel.reactions)} M {len(panmodel.metabolites)}")
     
     

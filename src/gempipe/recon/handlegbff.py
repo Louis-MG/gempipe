@@ -43,7 +43,7 @@ def get_sequences_and_source(gbff_file, ):
 
 
 
-def get_uniprot_table(accession, sequences, source_db, rformat):
+def get_uniprot_table(outdir, accession, sequences, source_db, rformat):
     
     
     # choose the crossref db (embl can be seen as a replacement for genbank)
@@ -71,7 +71,7 @@ def get_uniprot_table(accession, sequences, source_db, rformat):
 
 
     # define the tmp output text file:  
-    outpath = f'working/gannots/response_{accession}.tsv'
+    outpath = f'{outdir}working/gannots/response_{accession}.tsv'
 
     
     # perform the query: 
@@ -140,14 +140,14 @@ def get_features(accession, gbff_file):
     
     
     
-def get_gannots_tabular(accession, gbff_file, outfolder):
+def get_gannots_tabular(outdir, accession, gbff_file, outfolder):
     
     
     # get accession list and source database (genbank/refseq):
     sequences, source_db = get_sequences_and_source(gbff_file, )
     
     # get the uniprot crossref table:
-    up_table = get_uniprot_table(accession, sequences, source_db, 'tsv')
+    up_table = get_uniprot_table(outdir, accession, sequences, source_db, 'tsv')
     
     # parse gain the gbff obtaining the features (tabular):
     feat_table = get_features(accession, gbff_file)
@@ -234,7 +234,7 @@ def get_gannots_tabular(accession, gbff_file, outfolder):
     
 
     
-    merge_table.to_csv(f'working/gannots/gannots_{accession}.csv')
+    merge_table.to_csv(f'{outdir}working/gannots/gannots_{accession}.csv')
     return merge_table
 
 
@@ -297,7 +297,7 @@ def create_proteome_from_gbff(accession, gbff_file, gannots, outfolder):
         
                 
         
-def create_proteome_and_gannots(gbff_file, outfolder):
+def create_proteome_and_gannots(outdir, gbff_file, outfolder):
     
     
     # get the "accession" for this file (just the simple filename)
@@ -306,7 +306,7 @@ def create_proteome_and_gannots(gbff_file, outfolder):
     
                        
     # create gene annotation pnd.DataFrame (gannots):
-    gannots = get_gannots_tabular(accession, gbff_file, outfolder)
+    gannots = get_gannots_tabular(outdir, accession, gbff_file, outfolder)
     
     
     # create proteome fasta file:
@@ -344,13 +344,13 @@ def check_cached_parsing(logger, species_to_genbank, outdir):
             required_accessions.add(accession)
             
             # return empty if not found
-            if not os.path.exists('working/proteomes/' + accession + '.faa'):
+            if not os.path.exists(f'{outdir}working/proteomes/' + accession + '.faa'):
                 return False
-            if not os.path.exists('working/gannots/gannots_' + accession + '.csv'):
+            if not os.path.exists(f'{outdir}working/gannots/gannots_' + accession + '.csv'):
                 return False
             
             # populate the 'species_to_proteome' dict if files are already available:
-            species_to_proteome[species].append('working/proteomes/' + accession + '.faa')
+            species_to_proteome[species].append(f'{outdir}working/proteomes/' + accession + '.faa')
             
             
     # the 'all_gannots' dataframe must have exaclty the same accessions, no more, no less:
@@ -359,7 +359,7 @@ def check_cached_parsing(logger, species_to_genbank, outdir):
             
             
     # save the dictionary to disk: 
-    with open('working/proteomes/species_to_proteome.pickle', 'wb') as file:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'wb') as file:
         pickle.dump(species_to_proteome, file)
            
             
@@ -411,8 +411,8 @@ def handle_manual_genbanks(logger, genbanks, outdir, metadata):
     # PART B) parse each genbank file, and populate the species_to_proteome dictionary.
     # Moreover, concat the gannots to create a single annotation table. 
     logger.info("Parsing genbanks file to extract proteomes and gene annotations...")
-    os.makedirs('working/proteomes/', exist_ok=True)
-    os.makedirs('working/gannots/', exist_ok=True)
+    os.makedirs(f'{outdir}working/proteomes/', exist_ok=True)
+    os.makedirs(f'{outdir}working/gannots/', exist_ok=True)
     
     
     # check if files were already computed:
@@ -429,11 +429,11 @@ def handle_manual_genbanks(logger, genbanks, outdir, metadata):
         for file in species_to_genbank[species]:
             
             # all proteomes and gannots will be stored in 'working/proteomes/'.
-            proteome_filepath, gannots = create_proteome_and_gannots(file, outfolder='working/proteomes/')
+            proteome_filepath, gannots = create_proteome_and_gannots(outdir, file, outfolder=f'{outdir}working/proteomes/')
             created_files.append(proteome_filepath)
             all_gannots.append(gannots)
         species_to_proteome[species] = created_files
-    logger.debug(f"Input genbanks converted to proteomes in ./working/proteomes/.")
+    logger.debug(f"Input genbanks converted to proteomes in {outdir}working/proteomes/.")
     logger.debug(f"Created the species-to-proteome dictionary: {str(species_to_proteome)}.") 
 
     
@@ -450,16 +450,16 @@ def handle_manual_genbanks(logger, genbanks, outdir, metadata):
     
     
     # save the dictionary to disk: 
-    with open('working/proteomes/species_to_proteome.pickle', 'wb') as file:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'wb') as file:
         pickle.dump(species_to_proteome, file)
-    logger.debug(f"Saved the species-to-proteome dictionary to file: ./working/proteomes/species_to_proteome.pickle.")
+    logger.debug(f"Saved the species-to-proteome dictionary to file: {outdir}working/proteomes/species_to_proteome.pickle.")
     
     
     # Create the genomes/genomes.csv like if genomes were downloaded from NCBI.
     # Useful during plot generation.
     # Warning: the same columns are used in get_metadata_table(). But here only 2 can be filled: 'organism_name' and 'strain_isolate'.
-    get_genomes_csv(source='species_to_proteome')
-    response = update_metadata_manual(logger, metadata, source='species_to_proteome')
+    get_genomes_csv(outdir, source='species_to_proteome')
+    response = update_metadata_manual(logger, outdir, metadata, source='species_to_proteome')
     if response==1: return 1
     
     

@@ -39,15 +39,15 @@ def figure_modeled_reactions(logger, outdir):
     reaction_summary = pnd.DataFrame.from_records(reaction_summary).set_index('accession', drop=True, verify_integrity=True)
     
     
-    logger.info("Producing figure for modeled reactions in {outdir}/figures/reactions_modeled.png...")
+    logger.info(f"Producing figure for modeled reactions in {outdir}/figures/reactions_modeled.png...")
     
     
-    # join the dataframe to get 'strain_isolate' and 'organism_name' fields.
-    genomes_df = pnd.read_csv(f'working/genomes/genomes.csv', index_col=0)
-    genomes_df = genomes_df.set_index('assembly_accession', drop=True, verify_integrity=True)
+    # join the dataframe to get 'strain_isolate' and 'organism_name' fields ('species' and 'strain' in derive_strains.csv).
+    strains_df = derive_strains.set_index('accession', drop=True, verify_integrity=True)
     # retain only quality-filtered genomes retaining the original order: 
-    genomes_df = genomes_df.loc[[i for i in genomes_df.index if i in reaction_summary.index.to_list()], ]   
-    df = pnd.concat([genomes_df, reaction_summary, derive_strains.set_index('accession', drop=True, verify_integrity=True)[['R', 'G']]], axis=1)
+    strains_df = strains_df.loc[[i for i in strains_df.index if i in reaction_summary.index.to_list()], ]   
+    strains_df = strains_df[['species', 'strain', 'R', 'G']].rename(columns={'species': 'organism_name', 'strain': 'strain_isolate'})
+    df = pnd.concat([strains_df, reaction_summary], axis=1)
         
     
     # define colors:
@@ -87,7 +87,7 @@ def figure_modeled_reactions(logger, outdir):
     if len(df) <= 100:
         plt.savefig(outdir + 'figures/reactions_modeled.png', dpi=300, bbox_inches='tight')
     else:
-        logger.info("Number of genomes is >100: producing the SVG version instead {outdir}/figures/reactions_modeled.svg...")
+        logger.info(f"Number of genomes is >100: producing the SVG version instead {outdir}/figures/reactions_modeled.svg...")
         plt.savefig(outdir + 'figures/reactions_modeled.svg', bbox_inches='tight')
         
 

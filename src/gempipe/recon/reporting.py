@@ -39,7 +39,7 @@ def create_panmodel_proteome(logger, outdir):
     # collect the reference sequences
     sr_list = []
     added = set()
-    for record in SeqIO.parse('working/clustering/representatives.ren.faa', "fasta"):
+    for record in SeqIO.parse(f'{outdir}working/clustering/representatives.ren.faa', "fasta"):
         cluster, cds, accession = record.description.split(' ')
         if cluster in genes_to_report:
             sr = SeqRecord.SeqRecord(record.seq, id=cluster, description=f'{cds} {accession}')
@@ -68,7 +68,7 @@ def create_panmodel_proteome(logger, outdir):
     # collect the reference sequences
     sr_list = []
     added = set()
-    for record in SeqIO.parse('working/clustering/representatives.ren.faa', "fasta"):
+    for record in SeqIO.parse(f'{outdir}working/clustering/representatives.ren.faa', "fasta"):
         cluster, cds, accession = record.description.split(' ')
         if cluster in genes_to_report:
             sr = SeqRecord.SeqRecord(record.seq, id=cluster, description=f'{cds} {accession}')
@@ -91,11 +91,11 @@ def create_report(logger, outdir):
     report = []  # list of dicts, future dataframe
     
     
-    genomes_df = pnd.read_csv('working/genomes/genomes.csv', index_col=0)
+    genomes_df = pnd.read_csv(f'{outdir}working/genomes/genomes.csv', index_col=0)
     genomes_df = genomes_df.set_index('assembly_accession', drop=True, verify_integrity=True)
     
     # get the retained genomes/proteomes (post filtering):
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
         for species in species_to_proteome.keys(): 
             for proteome in species_to_proteome[species]:
@@ -223,11 +223,11 @@ def figure_genes_recovered(logger, cores, outdir, pam_modeled):
     rec_summary = get_accession_to_recovery(logger, cores, pam_modeled)   # get summary table.
     
     
-    logger.info("Producing figure for gene recovery in {outdir}/figures/genes_recovered.png...")
+    logger.info(f"Producing figure for gene recovery in {outdir}/figures/genes_recovered.png...")
     
     
     # join the dataframe to get 'strain_isolate' and 'organism_name' fields.
-    genomes_df = pnd.read_csv('working/genomes/genomes.csv', index_col=0)
+    genomes_df = pnd.read_csv(f'{outdir}working/genomes/genomes.csv', index_col=0)
     genomes_df = genomes_df.set_index('assembly_accession', drop=True, verify_integrity=True)
     # retain only quality-filtered genomes retaining the original order: 
     genomes_df = genomes_df.loc[[i for i in genomes_df.index if i in rec_summary.index.to_list()], ]   
@@ -258,7 +258,7 @@ def figure_genes_recovered(logger, cores, outdir, pam_modeled):
     if len(df) <= 100:
         plt.savefig(outdir + 'figures/gene_clusters_recovered.png', dpi=300, bbox_inches='tight')
     else:
-        logger.info("Number of genomes is >100: producing the SVG version instead {outdir}/figures/genes_recovered.svg...")
+        logger.info(f"Number of genomes is >100: producing the SVG version instead {outdir}/figures/genes_recovered.svg...")
         plt.savefig(outdir + 'figures/gene_clusters_recovered.svg', bbox_inches='tight')
 
 
@@ -416,11 +416,11 @@ def figure_modeled_genes(logger, cores, outdir, pam_modeled, report, draft_panmo
     gene_summary = pnd.DataFrame.from_records(gene_summary).set_index('accession', drop=True, verify_integrity=True)
     
     
-    logger.info("Producing figure for modeled gene clusters in {outdir}/figures/genes_modeled.png...")
+    logger.info(f"Producing figure for modeled gene clusters in {outdir}/figures/genes_modeled.png...")
     
     
     # join the dataframe to get 'strain_isolate' and 'organism_name' fields.
-    genomes_df = pnd.read_csv('working/genomes/genomes.csv', index_col=0)
+    genomes_df = pnd.read_csv(f'{outdir}working/genomes/genomes.csv', index_col=0)
     genomes_df = genomes_df.set_index('assembly_accession', drop=True, verify_integrity=True)
     # retain only quality-filtered genomes retaining the original order: 
     genomes_df = genomes_df.loc[[i for i in genomes_df.index if i in gene_summary.index.to_list()], ]   
@@ -474,7 +474,7 @@ def figure_modeled_genes(logger, cores, outdir, pam_modeled, report, draft_panmo
     if len(df) <= 100:
         plt.savefig(outdir + 'figures/gene_clusters_modeled.png', dpi=300, bbox_inches='tight')
     else:
-        logger.info("Number of genomes is >100: producing the SVG version instead {outdir}/figures/gene_clusters_modeled.svg...")
+        logger.info(f"Number of genomes is >100: producing the SVG version instead {outdir}/figures/gene_clusters_modeled.svg...")
         plt.savefig(outdir + 'figures/gene_clusters_modeled.svg', bbox_inches='tight')
         
     
@@ -653,11 +653,11 @@ def figure_modeled_reactions(logger, cores, outdir, pam_modeled, report, draft_p
     reaction_summary = pnd.DataFrame.from_records(reaction_summary).set_index('accession', drop=True, verify_integrity=True)
     
     
-    logger.info("Producing figure for modeled reactions in {outdir}/figures/reactions_modeled.png...")
+    logger.info(f"Producing figure for modeled reactions in {outdir}/figures/reactions_modeled.png...")
     
     
     # join the dataframe to get 'strain_isolate' and 'organism_name' fields.
-    genomes_df = pnd.read_csv('working/genomes/genomes.csv', index_col=0)
+    genomes_df = pnd.read_csv(f'{outdir}working/genomes/genomes.csv', index_col=0)
     genomes_df = genomes_df.set_index('assembly_accession', drop=True, verify_integrity=True)
     # retain only quality-filtered genomes retaining the original order: 
     genomes_df = genomes_df.loc[[i for i in genomes_df.index if i in reaction_summary.index.to_list()], ]   
@@ -706,7 +706,7 @@ def figure_modeled_reactions(logger, cores, outdir, pam_modeled, report, draft_p
     if len(df) <= 100:
         plt.savefig(outdir + 'figures/prel_reactions_modeled.png', dpi=300, bbox_inches='tight')
     else:
-        logger.info("Number of genomes is >100: producing the SVG version instead {outdir}/figures/prel_reactions_modeled.svg...")
+        logger.info(f"Number of genomes is >100: producing the SVG version instead {outdir}/figures/prel_reactions_modeled.svg...")
         plt.savefig(outdir + 'figures/prel_reactions_modeled.svg', bbox_inches='tight')
     
     

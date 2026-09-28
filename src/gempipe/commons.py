@@ -97,12 +97,12 @@ def gather_results(results):
 
 
 
-def get_retained_accessions():
+def get_retained_accessions(outdir):
     # to be called after the genomes filtering.
     
     
     accessions = set()
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
         for species in species_to_proteome.keys(): 
             for proteome in species_to_proteome[species]:
@@ -113,11 +113,11 @@ def get_retained_accessions():
 
 
 
-def check_cached(logger, pam_path, imp_files, summary_path=None):
+def check_cached(logger, outdir, pam_path, imp_files, summary_path=None):
     
     
     # get the accessions retained:
-    accessions = get_retained_accessions()
+    accessions = get_retained_accessions(outdir)
     
     
     # search for the PAM: 
@@ -153,11 +153,11 @@ def check_cached(logger, pam_path, imp_files, summary_path=None):
 
 
 
-def create_summary(logger, module_dir):
+def create_summary(logger, outdir, module_dir):
     
     
     # get the accessions retained:
-    accessions = get_retained_accessions()
+    accessions = get_retained_accessions(outdir)
     
     
     # parse each results file: 
@@ -193,11 +193,11 @@ def create_summary(logger, module_dir):
 
 
 
-def update_pam(logger, module_dir, pam):
+def update_pam(logger, outdir, module_dir, pam):
     
     
     # get the accessions retained:
-    accessions = get_retained_accessions()
+    accessions = get_retained_accessions(outdir)
     
     
     # define important objects:
@@ -311,7 +311,8 @@ def read_refmodel(refmodel):
 def get_outdir(outdir):
     
     # create the main output directory: 
-    if outdir.endswith('/') == False: outdir = outdir + '/'
+    # absolute path, so that cached paths (eg in pickles) are valid regardless of the CWD.
+    outdir = os.path.abspath(outdir) + '/'
     os.makedirs(outdir, exist_ok=True)
     
     return outdir
@@ -426,16 +427,16 @@ def strenghten_uptakes(model):
 
 
 
-def get_allmeta_df(): 
+def get_allmeta_df(outdir): 
     
     
-    genomes_df = pnd.read_csv('working/genomes/genomes.csv', index_col=0)
+    genomes_df = pnd.read_csv(f'{outdir}working/genomes/genomes.csv', index_col=0)
     genomes_df = genomes_df.set_index('assembly_accession', drop=True, verify_integrity=True)
 
-    bmetrics_df = pnd.read_csv('working/filtering/bmetrics.csv', index_col=0)
+    bmetrics_df = pnd.read_csv(f'{outdir}working/filtering/bmetrics.csv', index_col=0)
     bmetrics_df = bmetrics_df.set_index('accession', drop=True, verify_integrity=True)
 
-    tmetrics_df = pnd.read_csv('working/filtering/tmetrics.csv', index_col=0)
+    tmetrics_df = pnd.read_csv(f'{outdir}working/filtering/tmetrics.csv', index_col=0)
     tmetrics_df = tmetrics_df.set_index('accession', drop=True, verify_integrity=True)
     
     allmeta_df = pnd.concat([genomes_df, bmetrics_df, tmetrics_df], axis=1)
@@ -445,7 +446,7 @@ def get_allmeta_df():
 
 
 
-def get_genomes_csv(source='species_to_genome'):
+def get_genomes_csv(outdir, source='species_to_genome'):
     # Create the genomes/genomes.csv like if genomes were downloaded from NCBI.
     # Useful during plot generation.
     # Warning: the same columns are used in get_metadata_table(). But here only 2 can be filled: 'organism_name' and 'strain_isolate'.
@@ -453,11 +454,11 @@ def get_genomes_csv(source='species_to_genome'):
     
     if   source == 'species_to_genome':
         # load the previously created species_to_genome: 
-        with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+        with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
             species_to_gp = pickle.load(handler)   # species_to_genome  OR species_to_proteome
     elif source == 'species_to_proteome':
         # load the previously created species_to_proteome: 
-        with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+        with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
             species_to_gp = pickle.load(handler)   # species_to_genome  OR species_to_proteome
     
     
@@ -475,8 +476,8 @@ def get_genomes_csv(source='species_to_genome'):
             
             
     # save the metadata table to disk:
-    os.makedirs("working/genomes/", exist_ok=True)
-    metadata.to_csv("working/genomes/genomes.csv")
+    os.makedirs(f"{outdir}working/genomes/", exist_ok=True)
+    metadata.to_csv(f"{outdir}working/genomes/genomes.csv")
     
     
     
@@ -502,7 +503,7 @@ def remove_duplicated_strain_ids(df):
 
     
     
-def update_metadata_manual(logger, metadata, source='species_to_genomes'):
+def update_metadata_manual(logger, outdir, metadata, source='species_to_genomes'):
     
     
     # no manual corrections provided, exit: 
@@ -514,10 +515,10 @@ def update_metadata_manual(logger, metadata, source='species_to_genomes'):
     
     # load the previously created species_to_genome / species_to_proteome
     if   source == 'species_to_genome':
-        with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+        with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
             species_to_gp = pickle.load(handler)   # species_to_genome  OR species_to_proteome
     elif source == 'species_to_proteome':
-        with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+        with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
             species_to_gp = pickle.load(handler)   # species_to_genome  OR species_to_proteome
             
     
@@ -549,7 +550,7 @@ def update_metadata_manual(logger, metadata, source='species_to_genomes'):
     
     
     # load the original metadata table: 
-    metadata_ori = pnd.read_csv("working/genomes/genomes.csv", index_col=0)
+    metadata_ori = pnd.read_csv(f"{outdir}working/genomes/genomes.csv", index_col=0)
     metadata_ori = metadata_ori.set_index('assembly_accession', drop=True, verify_integrity=True)
     
     
@@ -593,10 +594,10 @@ def update_metadata_manual(logger, metadata, source='species_to_genomes'):
             
     # save updated dictionaries (replace old ones):
     if   source == 'species_to_genome':
-        with open('working/genomes/species_to_genome.pickle', 'wb') as handler:
+        with open(f'{outdir}working/genomes/species_to_genome.pickle', 'wb') as handler:
             pickle.dump(species_to_gp_updated, handler)
     elif source == 'species_to_proteome':
-        with open('working/proteomes/species_to_proteome.pickle', 'wb') as handler:
+        with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'wb') as handler:
             pickle.dump(species_to_gp_updated, handler)
 
         
@@ -606,7 +607,7 @@ def update_metadata_manual(logger, metadata, source='species_to_genomes'):
     metadata_updated = remove_duplicated_strain_ids(metadata_updated)
     metadata_updated = metadata_updated.sort_values(by=['organism_name', 'strain_isolate'], ascending=True)
     metadata_updated = metadata_updated.reset_index(drop=True) 
-    metadata_updated.to_csv("working/genomes/genomes.csv")
+    metadata_updated.to_csv(f"{outdir}working/genomes/genomes.csv")
     
     
     return 0

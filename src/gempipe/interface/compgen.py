@@ -476,7 +476,7 @@ def get_filtering_summary(working_dir='gempipe/working/', thr_N50=50000, thr_nc=
     Get a summary of the metrics used to filter genomes.
     
     Args:
-        working_dir (str): path to the gempipe's working directory.
+        working_dir (str): path to the gempipe's working directory (located at `<outdir>/working/`, where `<outdir>` is the `-o/--outdir` used with `gempipe recon`).
         thr_N50 (int): N50 threshold.
         thr_nc (int): number of contigs threshold.
         thr_bm (int): BUSCO M% (missing) threshold.

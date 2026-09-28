@@ -21,11 +21,11 @@ from ..commons import update_pam
 
 
 
-def update_seq_to_coords(logger): 
+def update_seq_to_coords(logger, outdir): 
     
     
     # load the previously created species_to_proteome: 
-    with open('working/proteomes/species_to_proteome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/proteomes/species_to_proteome.pickle', 'rb') as handler:
         species_to_proteome = pickle.load(handler)
         
     
@@ -39,21 +39,21 @@ def update_seq_to_coords(logger):
     
 
     # create an updateed seq_to_coords dict: 
-    with open('working/rec_masking/seq_to_coords.pickle', 'rb') as handler:
+    with open(f'{outdir}working/rec_masking/seq_to_coords.pickle', 'rb') as handler:
         seq_to_coords_update = pickle.load(handler)
     logger.debug(f'rec_overlap: seq_to_coords: starting from {len(seq_to_coords_update.values())} sequences.')
 
         
     # now add the new seqs (recovered by this module): 
     for accession in accessions: 
-        results_df = pnd.read_csv(f'working/rec_overlap/results/{accession}.csv', index_col=0)
+        results_df = pnd.read_csv(f'{outdir}working/rec_overlap/results/{accession}.csv', index_col=0)
         for index, row in results_df.iterrows():
             seq_to_coords_update[row['ID']] = {'accession': row['accession'], 'contig': row['contig'], 'strand': row['strand'], 'start': row['start'], 'end': row['end']}
     logger.debug(f'rec_overlap: seq_to_coords: {len(seq_to_coords_update.values())} sequences after the addition of new IDs.')
 
     
     # save the update dictionary: 
-    with open('working/rec_overlap/seq_to_coords.pickle', 'wb') as file:
+    with open(f'{outdir}working/rec_overlap/seq_to_coords.pickle', 'wb') as file:
         pickle.dump(seq_to_coords_update, file)
 
 
@@ -66,6 +66,7 @@ def task_recoverlap(genome, args):
     rep_to_aaseq = args['rep_to_aaseq']
     acc_to_suffix = args['acc_to_suffix']
     cluster_to_rep = args['cluster_to_rep']
+    outdir = args['outdir']
     
     
     # get the basename without extension:
@@ -75,7 +76,7 @@ def task_recoverlap(genome, args):
     
     # create a query file for each genome: 
     sr_list = []
-    with open(f'working/rec_overlap/queries/{accession}.query.faa', 'w') as w_handler: 
+    with open(f'{outdir}working/rec_overlap/queries/{accession}.query.faa', 'w') as w_handler: 
         for cluster in pam.index:
             cell = pam.loc[cluster, accession]
             if type(cell) == float:  # include only empty clusters
@@ -87,18 +88,18 @@ def task_recoverlap(genome, args):
     
     
     # create a blast database for the genome:
-    os.makedirs(f'working/rec_overlap/databases/{accession}/', exist_ok=True)
-    shutil.copyfile(genome, f'working/rec_overlap/databases/{accession}/{accession}.fna')  # just the content, not the permissions.
-    command = f"""makeblastdb -in working/rec_overlap/databases/{accession}/{accession}.fna -dbtype nucl -parse_seqids"""  # '-parse_seqids' is required for 'blastdbcmd'.
+    os.makedirs(f'{outdir}working/rec_overlap/databases/{accession}/', exist_ok=True)
+    shutil.copyfile(genome, f'{outdir}working/rec_overlap/databases/{accession}/{accession}.fna')  # just the content, not the permissions.
+    command = f"""makeblastdb -in {outdir}working/rec_overlap/databases/{accession}/{accession}.fna -dbtype nucl -parse_seqids"""  # '-parse_seqids' is required for 'blastdbcmd'.
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     process.wait()
     
     
     # perform the blast search:
     command = f'''tblastn \
-        -query working/rec_overlap/queries/{accession}.query.faa \
-        -db working/rec_overlap/databases/{accession}/{accession}.fna \
-        -out working/rec_overlap/alignments/{accession}.tsv \
+        -query {outdir}working/rec_overlap/queries/{accession}.query.faa \
+        -db {outdir}working/rec_overlap/databases/{accession}/{accession}.fna \
+        -out {outdir}working/rec_overlap/alignments/{accession}.tsv \
         -outfmt "6 {get_blast_header()}"
     '''
     process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -107,14 +108,14 @@ def task_recoverlap(genome, args):
     
     # read the masked alignment: 
     colnames = f'{get_blast_header()}'.split(' ')
-    masked = pnd.read_csv(f'working/rec_masking/alignments/{accession}.tsv', sep='\t', names=colnames )
+    masked = pnd.read_csv(f'{outdir}working/rec_masking/alignments/{accession}.tsv', sep='\t', names=colnames )
     masked['qcov'] = round((masked['qend'] -  masked['qstart'] +1)/ masked['qlen'] * 100, 1)
     masked['scov'] = round((masked['send'] -  masked['sstart'] +1)/ masked['slen'] * 100, 1)
     
     
     # read the NON-masked alignment: 
     colnames = f'{get_blast_header()}'.split(' ')
-    not_masked = pnd.read_csv(f'working/rec_overlap/alignments/{accession}.tsv', sep='\t', names=colnames )
+    not_masked = pnd.read_csv(f'{outdir}working/rec_overlap/alignments/{accession}.tsv', sep='\t', names=colnames )
     not_masked['qcov'] = round((not_masked['qend'] -  not_masked['qstart'] +1)/ not_masked['qlen'] * 100, 1)
     not_masked['scov'] = round((not_masked['send'] -  not_masked['sstart'] +1)/ not_masked['slen'] * 100, 1)
     
@@ -204,7 +205,7 @@ def task_recoverlap(genome, args):
     else:  # create an empty dataframe with compatible columns:
         # not_masked and masked should have the same header
         improvements_df = pnd.DataFrame(columns=not_masked.columns)
-    improvements_df.to_csv(f'working/rec_overlap/elongations/{accession}.csv')
+    improvements_df.to_csv(f'{outdir}working/rec_overlap/elongations/{accession}.csv')
 
 
     # instantiate key objects: 
@@ -232,7 +233,7 @@ def task_recoverlap(genome, args):
             start, end = end, start
         curr_seq_translated, curr_seq_translated_tostop = \
             extract_aa_seq_from_genome(
-                f'working/rec_overlap/databases/{accession}/{accession}.fna',
+                f'{outdir}working/rec_overlap/databases/{accession}/{accession}.fna',
                 contig, strand, start, end) 
 
 
@@ -255,7 +256,7 @@ def task_recoverlap(genome, args):
 
     # save results for this genome:
     df_result = pnd.DataFrame.from_records(df_result)
-    df_result.to_csv(f'working/rec_overlap/results/{accession}.csv')
+    df_result.to_csv(f'{outdir}working/rec_overlap/results/{accession}.csv')
     
     
     # return new rows for the sequences_df
@@ -263,7 +264,7 @@ def task_recoverlap(genome, args):
 
 
 
-def recovery_overlap(logger, cores):
+def recovery_overlap(logger, outdir, cores):
     
     
     # some log messages:
@@ -271,37 +272,37 @@ def recovery_overlap(logger, cores):
     
     
     # create sub-directories without overwriting:
-    os.makedirs('working/rec_overlap/', exist_ok=True)
-    os.makedirs('working/rec_overlap/queries/', exist_ok=True)
-    os.makedirs('working/rec_overlap/databases/', exist_ok=True)
-    os.makedirs('working/rec_overlap/alignments/', exist_ok=True)
-    os.makedirs('working/rec_overlap/elongations/', exist_ok=True)
-    os.makedirs('working/rec_overlap/results/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_overlap/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_overlap/queries/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_overlap/databases/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_overlap/alignments/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_overlap/elongations/', exist_ok=True)
+    os.makedirs(f'{outdir}working/rec_overlap/results/', exist_ok=True)
     
     
     # check if it's everything pre-computed
     response = check_cached(
-        logger, pam_path='working/rec_overlap/pam.csv',
-        summary_path='working/rec_overlap/summary.csv',
+        logger, outdir, pam_path=f'{outdir}working/rec_overlap/pam.csv',
+        summary_path=f'{outdir}working/rec_overlap/summary.csv',
         imp_files = [
-            'working/rec_overlap/sequences.csv',
-            'working/rec_overlap/seq_to_coords.pickle',])
+            f'{outdir}working/rec_overlap/sequences.csv',
+            f'{outdir}working/rec_overlap/seq_to_coords.pickle',])
     if response == 0: 
         return 0
     
     
     # load the assets to form the args dictionary:
-    pam = pnd.read_csv('working/rec_masking/pam.csv', index_col=0)
-    with open('working/clustering/acc_to_suffix.pickle', 'rb') as handler:
+    pam = pnd.read_csv(f'{outdir}working/rec_masking/pam.csv', index_col=0)
+    with open(f'{outdir}working/clustering/acc_to_suffix.pickle', 'rb') as handler:
         acc_to_suffix = pickle.load(handler)
-    with open('working/clustering/cluster_to_rep.pickle', 'rb') as handler:
+    with open(f'{outdir}working/clustering/cluster_to_rep.pickle', 'rb') as handler:
         cluster_to_rep = pickle.load(handler)
-    with open('working/clustering/rep_to_aaseq.pickle', 'rb') as handler:
+    with open(f'{outdir}working/clustering/rep_to_aaseq.pickle', 'rb') as handler:
         rep_to_aaseq = pickle.load(handler)
         
         
     # load the previously created species_to_genome: 
-    with open('working/genomes/species_to_genome.pickle', 'rb') as handler:
+    with open(f'{outdir}working/genomes/species_to_genome.pickle', 'rb') as handler:
         species_to_genome = pickle.load(handler)
     
     
@@ -329,15 +330,15 @@ def recovery_overlap(logger, cores):
             itertools.repeat('cds'), 
             itertools.repeat(logger), 
             itertools.repeat(task_recoverlap),  # will return a new sequences dataframe (to be concat).
-            itertools.repeat({'pam': pam, 'rep_to_aaseq': rep_to_aaseq, 'acc_to_suffix': acc_to_suffix, 'cluster_to_rep': cluster_to_rep}),
+            itertools.repeat({'pam': pam, 'rep_to_aaseq': rep_to_aaseq, 'acc_to_suffix': acc_to_suffix, 'cluster_to_rep': cluster_to_rep, 'outdir': outdir}),
         ), chunksize = 1)
     all_df_combined = gather_results(results)
     
     
     # save tabular results:
-    sequences_df = pnd.read_csv('working/rec_masking/sequences.csv', index_col=0)
+    sequences_df = pnd.read_csv(f'{outdir}working/rec_masking/sequences.csv', index_col=0)
     sequences_df_updated = pnd.concat([sequences_df, all_df_combined], axis=0)
-    sequences_df_updated.to_csv('working/rec_overlap/sequences.csv')
+    sequences_df_updated.to_csv(f'{outdir}working/rec_overlap/sequences.csv')
     
     
     # empty the globalpool
@@ -346,15 +347,15 @@ def recovery_overlap(logger, cores):
     
     
     # update the pam:
-    update_pam(logger, module_dir='working/rec_overlap', pam=pam)
+    update_pam(logger, outdir, module_dir=f'{outdir}working/rec_overlap', pam=pam)
     
     
     # update the seq to coordinates dictionary
-    update_seq_to_coords(logger)
+    update_seq_to_coords(logger, outdir)
     
     
     # create the summary:
-    create_summary(logger, module_dir='working/rec_overlap')
+    create_summary(logger, outdir, module_dir=f'{outdir}working/rec_overlap')
     
     
     return 0
